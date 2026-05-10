@@ -1,62 +1,69 @@
 # Integration Plan — StreetSamurai
 
-**Goal:** route StreetSamurai's per-app data and settings through `JsonSettingsStore<T>` and the Vault path helpers, retiring the local `FileSystemPathProvider` boilerplate. LLM credentials already flow through Legion; once Legion swaps to Vault, StreetSamurai inherits the cloud-native chain.
+**Status (audit-verified 2026-05-09):** `FileSystemPathProvider` exists at `v3/StreetSamurai.Core/Services/FileSystemPathProvider.cs` and `IPathProvider` at `v3/StreetSamurai.Core/Interfaces/IPathProvider.cs`. The original plan was correct on naming. `SettingsService` has an auto-save timer + ctor-time `MigrateLegacyCredentialsToSharedStore()` call — the refactor needs to preserve both.
 
-**Cloud-native impact:** StreetSamurai's Claude key resolves through User Secrets / App Service / Key Vault automatically once the configuration chain is wired. Story metadata and character state continue to live on disk (large per-machine data — kept in `%LOCALAPPDATA%`).
+**Cloud-native impact:** Claude key resolves through User Secrets / App Service / Key Vault once Phase B.2 is in. Story metadata and character state stay on disk under `%LOCALAPPDATA%\MindAttic\StreetSamurai\` (unchanged).
 
-**Path-convention note:** today StreetSamurai's settings live under `%LOCALAPPDATA%\MindAttic\StreetSamurai\`. Per the family-wide rule "settings stay roaming", consider moving the *settings* portion (theme, story prefs) to `%APPDATA%\MindAttic\StreetSamurai\` while leaving stories/character state in `%LOCALAPPDATA%`. Keep the legacy reader for one release so existing users migrate transparently.
+---
 
-## Files involved
+## Phase B.1 — silent inheritance via Legion 2.1.0
+
+StreetSamurai consumes Legion via `<ProjectReference>`. Bump Legion to 2.1.0 → StreetSamurai gets Vault transitively. The internal `MindAtticCredentialStore` calls inside `MigrateLegacyCredentialsToSharedStore()` survive unchanged (Legion's static facade).
 
 | File | Action |
 | --- | --- |
-| `StreetSamurai.Core/StreetSamurai.Core.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
 | `v3/StreetSamurai.Blazor/StreetSamurai.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>`. |
-| `StreetSamurai.Core/Storage/FileSystemPathProvider.cs` | Replace the hand-rolled `Path.Combine(LocalApplicationData, "MindAttic", "StreetSamurai", ...)` logic with `VaultPaths.LocalApp("StreetSamurai")` + `VaultPaths.Ensure(...)`. Switch the *settings* path to `VaultPaths.RoamingBucket("StreetSamurai")`. |
-| `StreetSamurai.Core/Services/SettingsService.cs` | Swap any hand-rolled JSON read/write with `JsonSettingsStore<StreetSamuraiSettings>` (which now defaults to roaming `%APPDATA%`). |
-| `v3/StreetSamurai.Blazor/Program.cs` | Wire the cloud-native config chain and call `services.AddMindAtticVault(builder.Configuration);` + `services.AddVaultAppSettings<StreetSamuraiSettings>("StreetSamurai");`. |
+| `NuGet.config` (repo root) | Create with `LocalNuGet` + `nuget.org` sources (none today). |
 
-## Step 1 — package reference + shared User Secrets ID
+Verify:
 
-```xml
-<PropertyGroup>
-  <UserSecretsId>mindattic-vault-shared</UserSecretsId>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
-</ItemGroup>
+```powershell
+dotnet build D:\Projects\MindAttic\StreetSamurai\StreetSamurai.slnx
+dotnet test  D:\Projects\MindAttic\StreetSamurai\StreetSamurai.slnx
 ```
 
-## Step 2 — refactor `FileSystemPathProvider`
+---
+
+## Phase B.2 — wire cloud-native config + `VaultPaths` adoption
+
+### Files
+
+| File | Action |
+| --- | --- |
+| `v3/StreetSamurai.Core/StreetSamurai.Core.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
+| `v3/StreetSamurai.Core/Services/FileSystemPathProvider.cs` | Replace inline `Environment.GetFolderPath(...)` with `VaultPaths.LocalApp("StreetSamurai")` and `VaultPaths.RoamingBucket("StreetSamurai")` for the settings-only paths. **Keep** the Stories/Characters/Engine paths under `%LOCALAPPDATA%` — those are large data, not settings. |
+| `v3/StreetSamurai.Core/Services/SettingsService.cs` | Leave the existing `Load()` / auto-save timer alone. Add an optional `OverlayFromConfiguration(IConfiguration)` overload (additive) that fills in `ProviderAuth.ApiKey` from `MindAttic:Vault:LLM:*:apiKey`. |
+| `v3/StreetSamurai.Blazor/Program.cs` | Wire the cloud-native config chain at the top. The existing `new SettingsService()` and `new FileSystemPathProvider(settings)` calls (lines 355–356) stay. |
+
+### Path-provider refactor (illustrative)
 
 ```csharp
 using MindAttic.Vault.Paths;
 
 public sealed class FileSystemPathProvider : IPathProvider
 {
-    public string LocalRoot     { get; }   // %LOCALAPPDATA%\MindAttic\StreetSamurai
-    public string SettingsPath  { get; }   // %APPDATA%\MindAttic\StreetSamurai
-    public string StoriesPath   { get; }   // %LOCALAPPDATA%\MindAttic\StreetSamurai\Stories
+    public string LocalRoot     { get; }   // %LOCALAPPDATA%\MindAttic\StreetSamurai (big data)
+    public string SettingsPath  { get; }   // %APPDATA%\MindAttic\StreetSamurai     (roaming prefs)
+    public string StoriesPath   { get; }
+    // ... existing properties ...
 
-    public FileSystemPathProvider()
+    public FileSystemPathProvider(SettingsService settings)
     {
         LocalRoot    = VaultPaths.Ensure(VaultPaths.LocalApp("StreetSamurai"));
         SettingsPath = VaultPaths.Ensure(VaultPaths.RoamingBucket("StreetSamurai"));
         StoriesPath  = VaultPaths.Ensure(Path.Combine(LocalRoot, "Stories"));
+        // ... rest unchanged ...
     }
 }
 ```
 
-This replaces ~30 lines of `Environment.GetFolderPath` boilerplate.
+This nets ~30 fewer lines of boilerplate.
 
-## Step 3 — refactor `SettingsService`
+### Settings migration
 
-Same pattern as `Tutor.md` — wrap a `JsonSettingsStore<StreetSamuraiSettings>` registered via `AddVaultAppSettings<...>("StreetSamurai")`. The store points at `%APPDATA%\MindAttic\StreetSamurai\settings.json` (roaming, matching the family default).
+If existing users have `%LOCALAPPDATA%\MindAttic\StreetSamurai\settings.json`, ship a one-time copy-on-startup that reads the old path, writes via the new `SettingsPath`, and logs a one-line warning. Defer deletion of the legacy file by one release.
 
-If existing users have `%LOCALAPPDATA%\MindAttic\StreetSamurai\settings.json`, ship a one-time migration on startup that copies the file across and logs a one-line warning, deferring deletion of the legacy file by one release.
-
-## Step 4 — wire DI
+### Program.cs additions
 
 ```csharp
 using MindAttic.Vault.Configuration;
@@ -64,20 +71,27 @@ using MindAttic.Vault.DependencyInjection;
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddMindAtticVaultFiles()
-    .AddUserSecrets<Program>()
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddMindAtticVault(builder.Configuration);
-builder.Services.AddVaultAppSettings<StreetSamuraiSettings>("StreetSamurai");
-builder.Services.AddLegionClient();
 ```
 
-## Step 5 — CLI mode
+### CLI mode
 
-StreetSamurai has CLI subcommands that bypass the web host. They construct `IPathProvider` independently. After the swap, any host (CLI or Blazor) gets the same paths because `VaultPaths.LocalApp` and `RoamingBucket` are host-agnostic. CLI hosts that don't build a full `IConfiguration` can still register the file-only `services.AddMindAtticVault()` overload for backward compat.
+StreetSamurai has CLI subcommands. They construct `FileSystemPathProvider` independently. The `VaultPaths.LocalApp` / `RoamingBucket` helpers are host-agnostic — no separate CLI plumbing needed. CLI hosts that don't build full IConfiguration can call `services.AddMindAtticVault()` (no-arg overload) for backward compat.
 
-## Step 6 — verify
+### Azure deployment
+
+StreetSamurai already has a GitHub Actions workflow on the `master` branch (`azure-deploy.yml` → App Service `streetsamurai`). Once Vault is on nuget.org, this is unblocked. Application Settings:
+
+| Application Setting | Value |
+| --- | --- |
+| `MindAttic__Vault__LLM__claude__apiKey` | `sk-ant-...` |
+
+### Verify
 
 ```powershell
 dotnet build D:\Projects\MindAttic\StreetSamurai\StreetSamurai.slnx
@@ -85,8 +99,8 @@ dotnet test  D:\Projects\MindAttic\StreetSamurai\StreetSamurai.slnx
 dotnet run   --project v3/StreetSamurai.Blazor
 ```
 
-Check `%LOCALAPPDATA%\MindAttic\StreetSamurai\Stories\` (should exist with stories) and `%APPDATA%\MindAttic\StreetSamurai\settings.json` (should round-trip). Rerun any Cypress specs that exercise the editor / settings.
+Confirm `%LOCALAPPDATA%\MindAttic\StreetSamurai\Stories\` exists and `%APPDATA%\MindAttic\StreetSamurai\settings.json` round-trips.
 
-## Rollback
+### Rollback
 
-`git restore StreetSamurai.Core/ v3/StreetSamurai.Blazor/Program.cs v3/StreetSamurai.Blazor/StreetSamurai.Blazor.csproj`. No data migration occurred (or, if option-2 migration ran, the legacy `%LOCALAPPDATA%` settings.json is still there for one release).
+`git restore v3/StreetSamurai.Core/ v3/StreetSamurai.Blazor/Program.cs` and `rm NuGet.config`. The `MigrateLegacyCredentialsToSharedStore()` call still runs through Legion's static facade — no data loss.

@@ -1,72 +1,43 @@
 # Integration Plan — Tutor
 
-**Goal:** smallest swap in the family. Tutor delegates all LLM credential reading to Legion already, so once Legion's swap is in (see `MindAttic.Legion.md`), Tutor inherits Vault transparently. The remaining work is to make Tutor's per-app settings persistence go through `JsonSettingsStore<T>` and to opt into the cloud-native configuration chain.
+**Status (audit-verified 2026-05-09):** Tutor's `SettingsService` uses `ISecurePreferences` for per-key async storage — fundamentally different from the JSON Load/Save model the original plan assumed. Refresh: skip the SettingsService refactor entirely; just inherit Vault transitively through Legion 2.1.0 and add the IConfiguration chain so future code can use `LlmCredentialResolver` if it wants.
 
-**Cloud-native impact:** Tutor reads its Claude key from User Secrets locally and App Service Application Settings (or Key Vault references) in production. Tutor preferences (theme, last lesson, etc.) keep roaming in `%APPDATA%\MindAttic\Tutor\settings.json`.
+**Cloud-native impact:** Tutor's Claude key resolves through User Secrets locally / App Service Application Settings in production once Phase B.2 is in. Tutor preferences (theme, lesson state, grading scale) keep using `ISecurePreferences` — out of scope for this plan.
 
-## Files involved
+---
+
+## Phase B.1 — silent inheritance via Legion 2.1.0
+
+`Tutor.Core` references `MindAttic.Legion` via `<ProjectReference>` (audit confirmed `..\..\MindAttic.Legion\MindAttic.Legion\MindAttic.Legion.csproj`). When Legion is bumped to 2.1.0 inside the family, Tutor inherits Vault transitively at compile time. **No code change in Tutor for B.1.**
 
 | File | Action |
 | --- | --- |
-| `Tutor.Core/Tutor.Core.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
-| `Tutor.Blazor/Tutor.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>`. |
-| `Tutor.Core/Services/SettingsService.cs` | If/where it persists JSON to disk, swap the hand-rolled `File.ReadAllText / WriteAllText` calls for `JsonSettingsStore<TutorSettings>`. |
-| `Tutor.Blazor/Program.cs` | Wire the cloud-native config chain and call `services.AddMindAtticVault(builder.Configuration);` + `services.AddVaultAppSettings<TutorSettings>("Tutor");`. |
+| `Tutor.Blazor/Tutor.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>` so future `dotnet user-secrets` commands target the shared file. |
 
-## Why so small
+Verify:
 
-Tutor's audit shows: no `appsettings.json` credentials, no overlay methods, no broker keys, no ApiKey property bag. The only ingest of credentials is `LegionClient` (DI-injected via `AddLegionClient()`). Once Legion goes through Vault, Tutor's chain is automatically `IConfiguration → Vault file fallback → Legion → Tutor` with zero changes here.
-
-## Step 1 — package reference + shared User Secrets ID
-
-```xml
-<PropertyGroup>
-  <UserSecretsId>mindattic-vault-shared</UserSecretsId>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
-</ItemGroup>
+```powershell
+dotnet build D:\Projects\MindAttic\Tutor\Tutor.slnx
+dotnet test  D:\Projects\MindAttic\Tutor\Tutor.slnx
 ```
 
-## Step 2 — `SettingsService` refactor (pattern only — apply to any Load/Save it currently has)
+Existing Tutor.Tests should pass unchanged — Legion's static credential facade still works.
 
-Replace:
+---
 
-```csharp
-private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, ... };
+## Phase B.2 — cloud-native config chain (forward-looking)
 
-public TutorSettings Load()
-{
-    if (!File.Exists(path)) return new TutorSettings();
-    var json = File.ReadAllText(path);
-    return JsonSerializer.Deserialize<TutorSettings>(json, JsonOptions) ?? new TutorSettings();
-}
+This unlocks future code paths in Tutor that want to read `IConfiguration["MindAttic:Vault:LLM:claude:apiKey"]` directly without going through Legion. The current `SettingsService` is left alone.
 
-public void Save(TutorSettings s)
-{
-    File.WriteAllText(path, JsonSerializer.Serialize(s, JsonOptions));
-}
-```
+### Files
 
-with:
+| File | Action |
+| --- | --- |
+| `Tutor.Blazor/Tutor.Blazor.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
+| `NuGet.config` (repo root) | Create with `LocalNuGet` + `nuget.org` sources. |
+| `Tutor.Blazor/Program.cs` | Wire the cloud-native config chain. Already has `AddLegionClient()` (line 17) — add the Vault registration above it so `IServiceProvider.GetRequiredService<LlmCredentialResolver>()` works for any future service. |
 
-```csharp
-using MindAttic.Vault.Settings;
-
-public sealed class SettingsService
-{
-    private readonly JsonSettingsStore<TutorSettings> store;
-
-    public SettingsService(JsonSettingsStore<TutorSettings> store) => this.store = store;
-
-    public TutorSettings Load()                  => store.Load();
-    public void          Save(TutorSettings s)   => store.Save(s);
-    public TutorSettings Update(Action<TutorSettings> mutate) => store.Update(mutate);
-}
-```
-
-## Step 3 — wire DI
+### Program.cs additions
 
 ```csharp
 using MindAttic.Vault.Configuration;
@@ -74,24 +45,34 @@ using MindAttic.Vault.DependencyInjection;
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddMindAtticVaultFiles()
-    .AddUserSecrets<Program>()
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddMindAtticVault(builder.Configuration);
-builder.Services.AddVaultAppSettings<TutorSettings>("Tutor");
 builder.Services.AddLegionClient();   // unchanged
 ```
 
-## Step 4 — verify
+### Verify
 
 ```powershell
 dotnet build D:\Projects\MindAttic\Tutor\Tutor.slnx
-dotnet run   --project Tutor.Blazor
+dotnet user-secrets --project Tutor.Blazor set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-test"
+dotnet run --project Tutor.Blazor
 ```
 
-Open Tutor in the browser. The persisted settings should round-trip exactly like before (look for `%APPDATA%\MindAttic\Tutor\settings.json` — note this is now roaming, matching the rest of the family). Rerun any Cypress specs that exercise the settings or LLM panels.
+Open Tutor in the browser, exercise an LLM-backed feature (lesson generation, grading), confirm it works with the User-Secret value. Cleanup:
 
-## Rollback
+```powershell
+dotnet user-secrets --project Tutor.Blazor remove "MindAttic:Vault:LLM:claude:apiKey"
+```
 
-`git restore Tutor.Core/ Tutor.Blazor/Program.cs Tutor.Blazor/Tutor.Blazor.csproj`. No data migration occurred.
+### Rollback
+
+`git restore Tutor.Blazor/Program.cs Tutor.Blazor/Tutor.Blazor.csproj` and `rm NuGet.config`. No data migration occurred; `ISecurePreferences` storage is untouched.
+
+## Notes
+
+- Tutor has no Azure deployment pipeline today, so nuget.org gate isn't blocking.
+- `SettingsService` (716 lines, async per-key storage) deliberately untouched. A future plan could introduce a `IClaudeKeyProvider` interface that `SettingsService` implements via Vault, but that's a separate refactor.

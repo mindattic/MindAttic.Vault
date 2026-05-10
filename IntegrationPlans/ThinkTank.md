@@ -1,68 +1,74 @@
 # Integration Plan — ThinkTank
 
-**Goal:** drop ThinkTank's wrapper of Legion's `MindAtticCredentialStore` and let it consume `LlmCredentialResolver` directly via DI. Trim the `SettingsService` overlap that today re-reads `appsettings.json` for provider defaults.
+**Status (audit-verified 2026-05-09):** medium complexity. The original plan only covered `GetKey` calls; the audit found `LoadAllRaw()`, `SaveRaw()`, and `ProvidersFileExists()` calls in `SettingsService.SyncLocalToSharedStore()` and `OverlaySharedCredentials()` that the plan glossed over. After Legion 2.1.0, those calls survive unchanged through the static facade, so a two-phase approach is safe.
 
-**Cloud-native impact:** ThinkTank's per-provider voter panels read keys from User Secrets locally and App Service Application Settings (or Key Vault references) in production. Existing `%APPDATA%\MindAttic\LLM\providers.json` keys keep working as a backward-compat fallback.
+**Cloud-native impact:** ThinkTank's voter-panel keys resolve through User Secrets locally / App Service Application Settings in production once Phase B.2 is in.
 
-## Files involved
+---
+
+## Phase B.1 — silent (no work required)
+
+After Legion 2.1.0 is consumed, ThinkTank's `MindAtticCredentialStore.LoadAllRaw() / SaveRaw() / ProvidersFileExists() / GetKey()` calls all delegate transparently to Vault's `LlmCredentialStore`. **No code change needed in ThinkTank for the file-store swap.** Just bump the Legion version in csproj.
+
+| File | Action |
+| --- | --- |
+| `ThinkTank.Core/ThinkTank.Core.csproj` | Bump `<PackageReference Include="MindAttic.Legion" Version="2.0.0" />` to `2.1.0`. |
+| `NuGet.config` (repo root) | Create with `LocalNuGet` + `nuget.org` sources (none today). |
+
+Verify:
+
+```powershell
+dotnet build D:\Projects\MindAttic\ThinkTank\ThinkTank.slnx
+dotnet test  D:\Projects\MindAttic\ThinkTank\ThinkTank.slnx
+```
+
+Expectation: 19 existing test files pass unchanged.
+
+---
+
+## Phase B.2 — cloud-native voter-panel resolution
+
+This is the IConfiguration upgrade. Run as a separate PR.
+
+### Files
 
 | File | Action |
 | --- | --- |
 | `ThinkTank.Core/ThinkTank.Core.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
-| `ThinkTank.Blazor/ThinkTank.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>`. |
-| `ThinkTank.Core/Services/SettingsService.cs` | Replace internal calls to `MindAtticCredentialStore.GetKey(...)` with the injected `LlmCredentialResolver`. Replace any custom JSON load/save with `JsonSettingsStore<ThinkTankSettings>`. |
-| `ThinkTank.Blazor/Program.cs` | Wire the cloud-native config chain and call `services.AddMindAtticVault(builder.Configuration);` plus `services.AddVaultAppSettings<ThinkTankSettings>("ThinkTank");`. |
+| `ThinkTank.Blazor/ThinkTank.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>` and the same package reference. |
+| `ThinkTank.Core/Services/SettingsService.cs` | Add a constructor overload that accepts `IConfiguration`. Layer config-backed reads on top of the existing local-store + shared-store fallback chain. **Do not** touch `SyncLocalToSharedStore()` or `OverlaySharedCredentials()` — the static `MindAtticCredentialStore` facade calls keep working as the file-store layer. |
+| `ThinkTank.Blazor/Program.cs` | Wire the cloud-native config chain and call `services.AddMindAtticVault(builder.Configuration)`. The factory at lines 15–34 (which casts to `ThinkTankSettingsService` and populates `ProviderDefaults` from config) stays — IConfiguration just gains additional sources. |
 
-## Step 1 — package reference + shared User Secrets ID
-
-```xml
-<PropertyGroup>
-  <UserSecretsId>mindattic-vault-shared</UserSecretsId>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
-</ItemGroup>
-```
-
-Keep the existing `MindAttic.Legion` reference — ThinkTank still talks to Legion for LLM calls; we're only swapping the *credential reader*.
-
-## Step 2 — refactor `SettingsService`
-
-Replace any field that looks like:
+### Suggested SettingsService overlay (additive)
 
 ```csharp
-public string? GetClaudeKey() => MindAtticCredentialStore.GetKey("claude");
-```
+using Microsoft.Extensions.Configuration;
+using MindAttic.Vault.Configuration;
 
-with constructor-injected resolver usage:
-
-```csharp
-using MindAttic.Vault.Credentials;
-using MindAttic.Vault.Settings;
-
-public sealed class SettingsService
+public partial class ThinkTankSettingsService
 {
-    private readonly LlmCredentialResolver llm;
-    private readonly JsonSettingsStore<ThinkTankSettings> settings;
-
-    public SettingsService(LlmCredentialResolver llm,
-                           JsonSettingsStore<ThinkTankSettings> settings)
+    /// <summary>
+    /// Cloud-native overlay: fills in missing apiKey on each ProviderAuth entry
+    /// from <c>MindAttic:Vault:LLM:&lt;providerId&gt;:apiKey</c>. Run AFTER the
+    /// existing local-store and shared-store loads so config always wins.
+    /// </summary>
+    public void OverlayFromConfiguration(IConfiguration config)
     {
-        this.llm = llm;
-        this.settings = settings;
+        if (config is null) return;
+        var section = config.GetSection(VaultConfigurationKeys.LlmSection);
+        if (!section.Exists()) return;
+
+        foreach (var providerId in ProviderAuth.Keys.ToList())
+        {
+            var key = section[$"{providerId}:{VaultConfigurationKeys.ApiKeyProperty}"];
+            if (string.IsNullOrWhiteSpace(key)) continue;
+            ProviderAuth[providerId] = ProviderAuth[providerId] with { ApiKey = key };
+        }
     }
-
-    public string? GetClaudeKey() => llm.GetKey("claude");
-
-    public ThinkTankSettings Load() => settings.Load();
-    public void              Save(ThinkTankSettings s) => settings.Save(s);
 }
 ```
 
-If `SettingsService` reads a provider-defaults section from `appsettings.json` and merges into a Legion config object, leave that mapping intact — Vault doesn't replace `IConfiguration`, it sits on top of it. The `ProviderDefaults` section becomes a non-secret companion to `MindAttic:Vault:LLM:*`.
-
-## Step 3 — wire DI in `Program.cs`
+### Program.cs additions
 
 ```csharp
 using MindAttic.Vault.Configuration;
@@ -72,36 +78,42 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddMindAtticVaultFiles()
-    .AddUserSecrets<Program>()
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddMindAtticVault(builder.Configuration);
-builder.Services.AddVaultAppSettings<ThinkTankSettings>("ThinkTank");
-builder.Services.AddLegionClient();   // unchanged
 ```
 
-## Step 4 — Azure deployment settings
+Then in the existing SettingsService factory, after `Load()` and the shared-store overlay, call `service.OverlayFromConfiguration(builder.Configuration)`.
 
-In App Service Configuration:
+### Azure deployment settings
 
-| Name | Value |
+| Application Setting | Value |
 | --- | --- |
 | `MindAttic__Vault__LLM__claude__apiKey` | `sk-ant-...` |
 | `MindAttic__Vault__LLM__gemini__apiKey` | `AIza...` |
-| `MindAttic__Vault__LLM__grok__apiKey`   | `xai-...` (optional) |
+| `MindAttic__Vault__LLM__grok__apiKey` | `xai-...` (optional) |
 
-Or set them as Key Vault references for production-grade rotation.
-
-## Step 5 — verify
+### Verify
 
 ```powershell
 dotnet build D:\Projects\MindAttic\ThinkTank\ThinkTank.slnx
 dotnet test  D:\Projects\MindAttic\ThinkTank\ThinkTank.slnx
-dotnet run   --project ThinkTank.Blazor
+dotnet user-secrets --project ThinkTank.Blazor set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-test"
+dotnet run --project ThinkTank.Blazor
 ```
 
-Confirm the multi-LLM roundtable still resolves the same provider keys (open the settings UI; the masked key fingerprints should match the previous run). Rerun any Cypress specs under `tests/ThinkTank.Cypress/` that exercise the credentials panel.
+The settings UI should show the User-Secret value masked. Cleanup:
 
-## Rollback
+```powershell
+dotnet user-secrets --project ThinkTank.Blazor remove "MindAttic:Vault:LLM:claude:apiKey"
+```
 
-`git restore ThinkTank.Core/Services/SettingsService.cs ThinkTank.Core/ThinkTank.Core.csproj ThinkTank.Blazor/Program.cs ThinkTank.Blazor/ThinkTank.Blazor.csproj`. No on-disk state is touched.
+### Rollback
+
+`git restore ThinkTank.Core/Services/SettingsService.cs ThinkTank.Core/ThinkTank.Core.csproj ThinkTank.Blazor/Program.cs ThinkTank.Blazor/ThinkTank.Blazor.csproj` and `rm NuGet.config`. No on-disk state is touched.
+
+## Notes
+
+- ThinkTank has no Azure deployment pipeline today, so the nuget.org publish gate is not blocking — Phase B.1 + B.2 can be piloted with the local feed alone.
+- The existing `SyncLocalToSharedStore()` still writes through the static facade, which lands in `%APPDATA%\MindAttic\LLM\providers.json`. That's correct behaviour during the transition.

@@ -406,14 +406,16 @@ Per the user's instruction, **no consumer is integrated yet.** Each project gets
 
 | # | Project | Plan | Notes |
 | --- | --- | --- | --- |
-| 1 | MindAttic.Legion | [`MindAttic.Legion.md`](IntegrationPlans/MindAttic.Legion.md) | First — every other app inherits the swap when Legion bumps. |
-| 2 | IdiotProof | [`IdiotProof.md`](IntegrationPlans/IdiotProof.md) | Biggest beneficiary (LLM + Broker + AppSettings + DB chain). |
-| 3 | ThinkTank | [`ThinkTank.md`](IntegrationPlans/ThinkTank.md) | |
-| 4 | Tutor | [`Tutor.md`](IntegrationPlans/Tutor.md) | Smallest swap; mostly inherits Legion's. |
-| 5 | StreetSamurai | [`StreetSamurai.md`](IntegrationPlans/StreetSamurai.md) | |
-| 6 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | |
-| 7 | FractionsOfACent | [`FractionsOfACent.md`](IntegrationPlans/FractionsOfACent.md) | |
-| 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
+| ✅ 1 | MindAttic.Legion | [`MindAttic.Legion.md`](IntegrationPlans/MindAttic.Legion.md) | **DONE.** Legion 2.1.0 packaged + pushed (commit fed2a19). |
+| 🟢 2 | FractionsOfACent | [`FractionsOfACent.md`](IntegrationPlans/FractionsOfACent.md) | **Recommended pilot** — no Azure pipeline, single static helper, cleanest diff. |
+| 🟡 3 | IdiotProof | [`IdiotProof.md`](IntegrationPlans/IdiotProof.md) | Two-phase: B.1 file-swap (delete duplicate BrokerCredentialStore), B.2 cloud-native. Has Azure pipeline; needs nuget.org. |
+| 🟡 4 | StreetSamurai | [`StreetSamurai.md`](IntegrationPlans/StreetSamurai.md) | Two-phase. Has Azure pipeline; needs nuget.org. |
+| 🟡 5 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | Two-phase. Has Azure pipeline; needs nuget.org. |
+| 🟢 6 | ThinkTank | [`ThinkTank.md`](IntegrationPlans/ThinkTank.md) | Two-phase. No Azure pipeline yet; can run locally. |
+| 🟢 7 | Tutor | [`Tutor.md`](IntegrationPlans/Tutor.md) | Two-phase. SettingsService is `ISecurePreferences`-based — left alone; only DI wiring changes. |
+| ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
+
+🟢 = ready to run today (local feed sufficient). 🟡 = needs nuget.org publish first to unblock Azure CI/CD.
 
 Every plan ends with a **rollback** section.
 

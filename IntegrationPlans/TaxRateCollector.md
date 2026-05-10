@@ -1,90 +1,73 @@
 # Integration Plan — TaxRateCollector
 
-**Goal:** consolidate TaxRateCollector's `SettingsService` into `JsonSettingsStore<AppSettings>`, route its USPS API key and Anthropic key reads through Vault's cloud-native resolver chain, and drop the inline `Environment.GetEnvironmentVariable(...)` overlay scattered through the file.
+**Status (audit-verified 2026-05-09):** the audit found `SettingsService` is parameterless and self-managing — incompatible with the original plan's DI-injected refactor. Refresh: minimal-touch approach. Add the IConfiguration chain. Add an `OverlayFromConfiguration(IConfiguration)` method to `SettingsService` instead of refactoring its constructor. Existing `MindAtticCredentialStore.GetKey/SetKey` calls inside `SettingsService` survive Legion 2.1.0 unchanged.
 
-**Cloud-native impact:** TaxRateCollector reads its USPS and Anthropic keys from User Secrets in dev and App Service Application Settings (or Key Vault references) in production. The `%APPDATA%\MindAttic\TaxRateCollector\settings.json` file continues to hold non-secret preferences (theme, font, feature flags).
+**Cloud-native impact:** USPS + Anthropic keys resolve through User Secrets / App Service Application Settings / Key Vault. The on-disk `%APPDATA%\MindAttic\TaxRateCollector\settings.json` keeps holding non-secret preferences; secrets read from `IConfiguration` are NOT written back to that file.
 
-## Files involved
+---
+
+## Phase B.1 — silent inheritance via Legion 2.1.0
+
+`SettingsService.cs` calls `MindAtticCredentialStore.GetKey("claude")` and `SetKey()` directly (audit confirmed). After Legion 2.1.0, those calls delegate to Vault's file-backed store — no code change needed.
+
+| File | Action |
+| --- | --- |
+| Bump Legion package reference (or ProjectReference is already there) | Verify Legion 2.1.0 resolves. |
+| `NuGet.config` (repo root) | Create with `LocalNuGet` + `nuget.org` sources (none today). |
+| `TaxRateCollector.Blazor/TaxRateCollector.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>`. |
+
+Verify the existing `dotnet build` and Razor pages still work.
+
+---
+
+## Phase B.2 — additive cloud-native overlay
+
+### Files
 
 | File | Action |
 | --- | --- |
 | `TaxRateCollector.Infrastructure/TaxRateCollector.Infrastructure.csproj` | Add `<PackageReference Include="MindAttic.Vault" Version="0.2.0" />`. |
-| `TaxRateCollector.Blazor/TaxRateCollector.Blazor.csproj` | Add `<UserSecretsId>mindattic-vault-shared</UserSecretsId>`. |
-| `TaxRateCollector.Infrastructure/Services/SettingsService.cs` | Replace `Load()/Save()` with `JsonSettingsStore<AppSettings>`. Move the USPS / Anthropic key reads to Vault resolvers + an `EnvironmentOverlay` for env var fallback. |
-| `TaxRateCollector.Blazor/Program.cs` | Wire the cloud-native config chain and call `services.AddMindAtticVault(builder.Configuration);` + `services.AddVaultAppSettings<AppSettings>("TaxRateCollector");`. |
+| `TaxRateCollector.Infrastructure/Services/SettingsService.cs` | Add `OverlayFromConfiguration(IConfiguration)`. **Do not** change the existing `Load()` / `Save()` / `SetTheme()` signatures or constructor. |
+| `TaxRateCollector.Blazor/Program.cs` | Wire the cloud-native config chain. Call the overlay AFTER `Load()`. |
 
-## On-disk layout (settings stay in roaming `%APPDATA%`)
-
-```
-%APPDATA%\MindAttic\TaxRateCollector\
-├── settings.json          ← non-secret preferences (theme, font, feature flags)
-└── evidence\              ← evidence files (untouched by Vault)
-```
-
-Secrets that previously lived in `settings.json` (USPS key, Anthropic key) move into `IConfiguration`. Existing values are read once at upgrade time by the legacy field on `AppSettings` and treated as a one-time fallback.
-
-## Step 1 — package reference + shared User Secrets ID
-
-```xml
-<PropertyGroup>
-  <UserSecretsId>mindattic-vault-shared</UserSecretsId>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="MindAttic.Vault" Version="0.2.0" />
-</ItemGroup>
-```
-
-## Step 2 — `SettingsService` refactor
+### `SettingsService.OverlayFromConfiguration` (additive method)
 
 ```csharp
+using Microsoft.Extensions.Configuration;
 using MindAttic.Vault.Configuration;
-using MindAttic.Vault.Credentials;
-using MindAttic.Vault.Paths;
-using MindAttic.Vault.Settings;
 
-public sealed class SettingsService
+public partial class SettingsService
 {
-    private readonly JsonSettingsStore<AppSettings> store;
-    private readonly LlmCredentialResolver llm;
-    private readonly IConfiguration config;
-
-    public SettingsService(JsonSettingsStore<AppSettings> store,
-                           LlmCredentialResolver llm,
-                           IConfiguration config)
+    /// <summary>
+    /// Layers IConfiguration values (User Secrets, App Service Application Settings,
+    /// Key Vault) on top of the loaded <see cref="Current"/> settings. Call after
+    /// <see cref="Load"/>. Does NOT persist the overlaid values back to the local
+    /// settings.json — secrets are kept in-memory only.
+    /// </summary>
+    public void OverlayFromConfiguration(IConfiguration config)
     {
-        this.store  = store;
-        this.llm    = llm;
-        this.config = config;
+        if (config is null || Current is null) return;
+
+        var anthropic = config[VaultConfigurationKeys.ProviderApiKeyPath(
+            VaultConfigurationKeys.LlmSection, "claude")];
+        if (!string.IsNullOrWhiteSpace(anthropic)) Current.AnthropicApiKey = anthropic;
+
+        var usps = config[$"{VaultConfigurationKeys.TokensSection}:usps"];
+        if (!string.IsNullOrWhiteSpace(usps)) Current.UspsApiKey = usps;
     }
-
-    public AppSettings Load()
-    {
-        var s = store.Load();
-
-        // Pull secrets from IConfiguration (User Secrets / App Service / Key Vault).
-        s.AnthropicApiKey = llm.GetKey("claude")
-                            ?? config["MindAttic:Vault:Tokens:usps"]   // wrong key on purpose: see "verify" below
-                            ?? s.AnthropicApiKey;
-        s.UspsApiKey      = config["MindAttic:Vault:Tokens:usps"] ?? s.UspsApiKey;
-
-        // Optional final overlay from process env vars (Azure App Service legacy names).
-        EnvironmentOverlay.ApplyAll(new (string, Action<string>)[]
-        {
-            ("USPS_API_KEY",      v => s.UspsApiKey      = v),
-            ("ANTHROPIC_API_KEY", v => s.AnthropicApiKey = v),
-        });
-
-        return s;
-    }
-
-    public void Save(AppSettings s) => store.Save(s);
 }
 ```
 
-> **Audit note.** The exact env var names + the existing `appsettings.json` key paths must be confirmed against current `SettingsService.cs` before merging. Replace `MindAttic:Vault:Tokens:usps` etc. with the correct paths if the project already settled on different names.
+### Persistence safety: don't write secrets back
 
-## Step 3 — wire DI
+After loading config-overlaid secrets into `Current`, the existing `Save()` would write them back to disk. Two options to prevent this leak:
+
+1. **Snapshot pattern (recommended).** Add a separate `OverlaidView` that returns a `Current` clone with secrets, while `Save()` continues to write the unaltered base. Requires a small ctor split.
+2. **Strip on save.** Wrap `Save()` to clear `AnthropicApiKey` / `UspsApiKey` before serialization, then restore after. Simpler but feels brittle.
+
+Pick (1) for the implementation; the snippet above leaves the choice to the implementer. Document the chosen pattern in the PR.
+
+### Program.cs additions
 
 ```csharp
 using MindAttic.Vault.Configuration;
@@ -92,35 +75,48 @@ using MindAttic.Vault.DependencyInjection;
 
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddMindAtticVaultFiles()
-    .AddUserSecrets<Program>()
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 builder.Services.AddMindAtticVault(builder.Configuration);
-builder.Services.AddVaultAppSettings<AppSettings>("TaxRateCollector");
 ```
 
-## Step 4 — Azure deployment settings
+Update the existing `SettingsService` registration (Program.cs lines 118–120):
+
+```csharp
+builder.Services.AddSingleton(sp =>
+{
+    var settings = new SettingsService();
+    settings.Load();
+    settings.OverlayFromConfiguration(sp.GetRequiredService<IConfiguration>());
+    return settings;
+});
+```
+
+(Service-locator pattern is acceptable here for a singleton initialiser.)
+
+### Azure deployment
+
+Existing GitHub Actions workflow targets App Service `taxratecollector`. Application Settings:
 
 | Application Setting | Value |
 | --- | --- |
 | `MindAttic__Vault__LLM__claude__apiKey` | `sk-ant-...` |
 | `MindAttic__Vault__Tokens__usps` | `USPS-...` |
+| `ConnectionStrings__DefaultConnection` | unchanged |
 
-## Step 5 — verify
+### Verify
 
 ```powershell
 dotnet build D:\Projects\MindAttic\TaxRateCollector\TaxRateCollector.slnx
-dotnet run   --project TaxRateCollector.Blazor
+dotnet user-secrets --project TaxRateCollector.Blazor set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-test"
+dotnet run --project TaxRateCollector.Blazor
 ```
 
-Confirm the existing `settings.json` round-trips (open the settings page, save, diff the file — only field order may shift). Rerun any Cypress specs.
+Open the settings page; confirm the masked Claude key reflects the User-Secret value. Save the page; re-open `%APPDATA%\MindAttic\TaxRateCollector\settings.json` and confirm `anthropicApiKey` is empty (snapshot pattern working).
 
-## Rollback
+### Rollback
 
-`git restore TaxRateCollector.Infrastructure/ TaxRateCollector.Blazor/Program.cs TaxRateCollector.Blazor/TaxRateCollector.Blazor.csproj`.
-
-## Risks
-
-- **Secrets bleed.** The legacy `settings.json` likely has `UspsApiKey` and `AnthropicApiKey` fields persisted on disk. After the swap, blank those fields on first save so they're not written back from `AppSettings.Save(...)`. Add a one-line migration that nulls them out.
-- **Path convention.** Verify `JsonSettingsStore<AppSettings>.ForApp("TaxRateCollector")` resolves to the same `%APPDATA%\MindAttic\TaxRateCollector\` path the project currently uses (it does, given Vault 0.2.0's roaming default).
+Drop `OverlayFromConfiguration`, the Program.cs additions, and the new package reference. `git restore` brings the parameterless service back; on-disk state is untouched.
