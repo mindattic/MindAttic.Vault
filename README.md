@@ -406,16 +406,16 @@ Per the user's instruction, **no consumer is integrated yet.** Each project gets
 
 | # | Project | Plan | Notes |
 | --- | --- | --- | --- |
-| ✅ 1 | MindAttic.Legion | [`MindAttic.Legion.md`](IntegrationPlans/MindAttic.Legion.md) | **DONE.** Legion 2.1.0 packaged + pushed (commit fed2a19). |
-| 🟢 2 | FractionsOfACent | [`FractionsOfACent.md`](IntegrationPlans/FractionsOfACent.md) | **Recommended pilot** — no Azure pipeline, single static helper, cleanest diff. |
-| 🟡 3 | IdiotProof | [`IdiotProof.md`](IntegrationPlans/IdiotProof.md) | Two-phase: B.1 file-swap (delete duplicate BrokerCredentialStore), B.2 cloud-native. Has Azure pipeline; needs nuget.org. |
-| 🟡 4 | StreetSamurai | [`StreetSamurai.md`](IntegrationPlans/StreetSamurai.md) | Two-phase. Has Azure pipeline; needs nuget.org. |
-| 🟡 5 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | Two-phase. Has Azure pipeline; needs nuget.org. |
-| 🟢 6 | ThinkTank | [`ThinkTank.md`](IntegrationPlans/ThinkTank.md) | Two-phase. No Azure pipeline yet; can run locally. |
-| 🟢 7 | Tutor | [`Tutor.md`](IntegrationPlans/Tutor.md) | Two-phase. SettingsService is `ISecurePreferences`-based — left alone; only DI wiring changes. |
+| ✅ 1 | MindAttic.Legion | [`MindAttic.Legion.md`](IntegrationPlans/MindAttic.Legion.md) | **DONE.** Legion 2.1.0 published to nuget.org (commit `fed2a19`). |
+| ✅ 2 | FractionsOfACent | [`FractionsOfACent.md`](IntegrationPlans/FractionsOfACent.md) | **DONE.** GitHubTokenProvider in place; priority chain verified end-to-end (commit `4c593e5`). |
+| ✅ 3 | ThinkTank | [`ThinkTank.md`](IntegrationPlans/ThinkTank.md) | **DONE.** SettingsServiceVaultOverlay layered on existing factory; 252 tests pass (commit `05bbb30`). |
+| ✅ 4 | Tutor | [`Tutor.md`](IntegrationPlans/Tutor.md) | **DONE.** Forward-looking DI wiring only; 338 tests pass (commit `5b33913`). |
+| ✅ 5 | IdiotProof | [`IdiotProof.md`](IntegrationPlans/IdiotProof.md) | **DONE.** Duplicate BrokerCredentialStore deleted; OverlayFromConfiguration added; 105 tests pass (commit `b1e7dcf`). |
+| ✅ 6 | StreetSamurai | [`StreetSamurai.md`](IntegrationPlans/StreetSamurai.md) | **DONE.** ResolveApiKey now consults VaultConfiguration first; 21 settings tests pass (commit `18b9993`). |
+| ✅ 7 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | **DONE.** Static-field IConfiguration injection + Save() leak protection; 29 settings tests pass (commit `bcefece`). |
 | ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
 
-🟢 = ready to run today (local feed sufficient). 🟡 = needs nuget.org publish first to unblock Azure CI/CD.
+**Status:** all integrations applied. `MindAttic.Vault 0.2.0` and `MindAttic.Legion 2.1.0` are live on nuget.org so every consumer's GitHub Actions CI/CD now resolves the package without local-feed plumbing.
 
 Every plan ends with a **rollback** section.
 
