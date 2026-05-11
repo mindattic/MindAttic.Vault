@@ -55,4 +55,28 @@ public class EnvironmentOverlayTests
         });
         Assert.That(hits, Is.EquivalentTo(new[] { "a:alpha", "c:alpha" }));
     }
+
+    [Test]
+    public void Apply_Returns_When_EnvVar_Is_Empty_Or_Null()
+    {
+        var called = false;
+        EnvironmentOverlay.Apply("",    _ => called = true);
+        EnvironmentOverlay.Apply("   ", _ => called = true);
+        EnvironmentOverlay.Apply(null!, _ => called = true);
+        Assert.That(called, Is.False);
+    }
+
+    [Test]
+    public void Apply_Returns_When_Setter_Is_Null()
+    {
+        // Should not throw — null setter is silently ignored even when the var is set.
+        Environment.SetEnvironmentVariable(Var, "value");
+        Assert.DoesNotThrow(() => EnvironmentOverlay.Apply(Var, null!));
+    }
+
+    [Test]
+    public void ApplyAll_Returns_Silently_For_Null_Pairs_Enumerable()
+    {
+        Assert.DoesNotThrow(() => EnvironmentOverlay.ApplyAll(null!));
+    }
 }

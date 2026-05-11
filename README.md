@@ -374,21 +374,26 @@ var key = resolver.Resolve("claude");
 
 ## Testing strategy
 
-**Unit & integration:** 88 NUnit tests covering every public type:
+**Unit & integration:** 223 NUnit tests covering every public type, including
+argument validation, malformed-input handling, atomic-write behaviour, and the
+full cloud-native end-to-end flow:
 
-- `VaultPaths` (env override, bucket combine, app combine)
-- `EnvironmentOverlay` (apply, skip-empty, bulk apply)
-- `CredentialStore` (3-tier, malformed JSON, atomic write, sibling field preservation)
-- `LlmCredentialStore` (type inference, model/maxTokens preservation)
-- `BrokerCredentialStore` (full record I/O, partial-rotate preservation)
-- `TokenStore` (read/write/remove, case insensitivity)
-- `JsonSettingsStore<T>` (round-trip, defaults on malformed, update semantics)
-- `KeyResolver` (chain, throw-survive, explicit/env/store/configuration steps)
-- `MindAtticConfigurationSource` (file → IConfiguration projection, watcher hooks)
-- `ConfigurationCredentialStore` (read-only contract, schema mapping, raw payload reconstruction)
-- `CompositeCredentialStore` (priority, write-targeting, list union)
-- `LlmCredentialResolver` / `BrokerCredentialResolver` (cloud-native end-to-end)
-- `CloudNativeIntegrationTests` (full flow: in-memory IConfiguration + temp file source + env-var overlay, in DI)
+- `VaultPaths` — env override, bucket/app combine, `Ensure`, defaults, constants
+- `EnvironmentOverlay` — apply, skip-empty, bulk apply, null-tolerance
+- `CredentialStore` — 3-tier precedence, malformed JSON, atomic write + `.bak`, sibling field preservation, argument validation, constructor guards
+- `LlmCredentialStore` — type inference (anthropic / google / bearer), model + maxTokens preservation, `Default` singleton, malformed-existing recovery
+- `BrokerCredentialStore` — full record I/O, partial-rotate preservation, type inference (alpaca prefix), wrong-type-field defence, argument validation, `Default` singleton
+- `TokenStore` — read/write/remove, case insensitivity, atomic swap (`.bak`), `ForBucket`, malformed/empty file handling, argument validation
+- `JsonSettingsStore<T>` — round-trip, defaults on malformed, `Update` semantics, factories (`ForApp` / `ForLocalApp` / `ForBucket`), custom JSON options, argument validation
+- `KeyResolver` — chain, throw-survive, every step builder (`Explicit` / `Env` / `EnvByConvention` / `FromStore` / `FromConfiguration`), normalisation, custom suffixes, argument validation
+- `MindAtticConfigurationSource` / `…Provider` — file → IConfiguration projection, custom buckets, scalar coercion (bool/int/double), array projection, `ReloadOnChange` watcher hooks, malformed/empty/non-object resilience, `EffectiveRoot` fallback
+- `ConfigurationCredentialStore` — read-only contract (`SetKey`, `SaveAllRaw`, `SaveRaw` all throw), schema mapping, raw payload reconstruction, scalar coercion
+- `CompositeCredentialStore` — priority, write-targeting, list union, raw layering, throwing-inner-store survival, null-store filtering
+- `ConfigurationBuilderExtensions` — argument validation, fluent return, `configure` callback semantics
+- `VaultConfigurationKeys` — every constant locked down, every path-builder argument-validated
+- `ServiceCollectionExtensions` — DI registration (file-only + cloud-native), `AddVaultAppSettings<T>` factory, fluent return, full argument validation
+- `LlmCredentialResolver` / `BrokerCredentialResolver` — cloud-native end-to-end
+- `CloudNativeIntegrationTests` — full flow: in-memory IConfiguration + temp file source + env-var overlay, in DI
 
 Run them:
 
@@ -398,7 +403,9 @@ dotnet test D:\Projects\MindAttic\MindAttic.Vault\MindAttic.Vault.slnx
 
 **No real `%APPDATA%` is touched** — every test redirects via env vars (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`) or temp directories.
 
-**About Cypress:** Vault is a class library with no UI. Cypress doesn't apply here. Each *consumer* project (Tutor, ThinkTank, IdiotProof, …) has its own Cypress suite that exercises the credential surface through its own UI; those suites continue to work unchanged after the swap because Vault preserves the on-disk shape and resolution semantics. The integration plan for each consumer calls out which Cypress specs to re-run.
+**Documentation:** the package now ships an XML documentation file (`MindAttic.Vault.xml`) so consumers see IntelliSense for every public type and member.
+
+**About Cypress / browser E2E:** Vault is a class library with no UI surface. Cypress (or Playwright) doesn't apply here — there is no DOM to drive. Each *consumer* project (Tutor, ThinkTank, IdiotProof, …) has its own Cypress suite that exercises the credential surface through its own UI; those suites continue to work unchanged after the swap because Vault preserves the on-disk shape and resolution semantics. The integration plan for each consumer calls out which Cypress specs to re-run. The `CloudNativeIntegrationTests` fixture in this repo is the equivalent end-to-end coverage at the library level.
 
 ## Integration plans (per-project rollout)
 

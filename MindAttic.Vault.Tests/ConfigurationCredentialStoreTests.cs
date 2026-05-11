@@ -115,4 +115,123 @@ public class ConfigurationCredentialStoreTests
         }));
         Assert.That(populated.ProvidersFileExists(), Is.True);
     }
+
+    // ── Constructor / argument validation ───────────────────────────────────────
+
+    [Test]
+    public void Constructor_Throws_For_Null_Configuration()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new ConfigurationCredentialStore(null!, "MindAttic:Vault:LLM"));
+    }
+
+    [Test]
+    public void Constructor_Throws_For_Empty_Bucket_Section()
+    {
+        var config = BuildConfig(new Dictionary<string, string?>());
+        Assert.Throws<ArgumentException>(() => new ConfigurationCredentialStore(config, ""));
+        Assert.Throws<ArgumentException>(() => new ConfigurationCredentialStore(config, "   "));
+        Assert.Throws<ArgumentException>(() => new ConfigurationCredentialStore(config, null!));
+    }
+
+    [Test]
+    public void GetKey_Returns_Null_For_Empty_Provider_Id()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>
+        {
+            ["MindAttic:Vault:LLM:claude:apiKey"] = "k"
+        }));
+        Assert.That(store.GetKey(""),    Is.Null);
+        Assert.That(store.GetKey("   "), Is.Null);
+    }
+
+    // ── Read-only contract ──────────────────────────────────────────────────────
+
+    [Test]
+    public void Write_Methods_All_Throw_NotSupported()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>()));
+        Assert.Throws<NotSupportedException>(() => store.SetKey("claude", "x"));
+        Assert.Throws<NotSupportedException>(() => store.SaveAllRaw(new Dictionary<string, string>()));
+        Assert.Throws<NotSupportedException>(() => store.SaveRaw("claude", "{}"));
+    }
+
+    // ── Properties / sentinels ──────────────────────────────────────────────────
+
+    [Test]
+    public void BucketSection_Exposes_Constructor_Argument()
+    {
+        var custom = new ConfigurationCredentialStore(
+            BuildConfig(new Dictionary<string, string?>()),
+            "Custom:Section:Path");
+        Assert.That(custom.BucketSection, Is.EqualTo("Custom:Section:Path"));
+    }
+
+    [Test]
+    public void Directory_And_ProvidersFilePath_Use_Synthetic_Sentinels()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>()));
+        Assert.That(store.Directory,         Is.EqualTo("(configuration)"));
+        Assert.That(store.ProvidersFilePath, Is.EqualTo("(configuration:MindAttic:Vault:LLM)"));
+    }
+
+    [Test]
+    public void ListProviders_Returns_All_Providers()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>
+        {
+            ["MindAttic:Vault:LLM:claude:apiKey"] = "C",
+            ["MindAttic:Vault:LLM:gemini:apiKey"] = "G",
+        }));
+
+        Assert.That(store.ListProviders(), Is.EquivalentTo(new[] { "claude", "gemini" }));
+    }
+
+    // ── LoadAllRaw scalar coercion ──────────────────────────────────────────────
+
+    [Test]
+    public void LoadAllRaw_Coerces_Bool_Int_And_Double_Leaves()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>
+        {
+            ["MindAttic:Vault:LLM:claude:apiKey"]    = "sk",
+            ["MindAttic:Vault:LLM:claude:enabled"]   = "true",
+            ["MindAttic:Vault:LLM:claude:maxTokens"] = "8192",
+            ["MindAttic:Vault:LLM:claude:weight"]    = "0.75",
+        }));
+
+        var raw = store.LoadAllRaw();
+        using var doc = JsonDocument.Parse(raw["claude"]);
+        Assert.That(doc.RootElement.GetProperty("enabled").ValueKind,   Is.EqualTo(JsonValueKind.True));
+        Assert.That(doc.RootElement.GetProperty("maxTokens").ValueKind, Is.EqualTo(JsonValueKind.Number));
+        Assert.That(doc.RootElement.GetProperty("weight").GetDouble(),  Is.EqualTo(0.75).Within(0.0001));
+    }
+
+    [Test]
+    public void LoadAllRaw_Surfaces_Numeric_Keyed_Children_As_Array()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>
+        {
+            ["MindAttic:Vault:LLM:claude:tags:0"] = "alpha",
+            ["MindAttic:Vault:LLM:claude:tags:1"] = "beta",
+            ["MindAttic:Vault:LLM:claude:tags:2"] = "gamma",
+        }));
+
+        var raw = store.LoadAllRaw();
+        using var doc = JsonDocument.Parse(raw["claude"]);
+        var tags = doc.RootElement.GetProperty("tags");
+        Assert.That(tags.ValueKind, Is.EqualTo(JsonValueKind.Array));
+        Assert.That(tags.EnumerateArray().Select(e => e.GetString()),
+            Is.EqualTo(new[] { "alpha", "beta", "gamma" }));
+    }
+
+    [Test]
+    public void GetKey_Trims_Trailing_Whitespace_With_All_Whitespace_Falling_Back_To_Null()
+    {
+        var store = ConfigurationCredentialStore.ForLlm(BuildConfig(new Dictionary<string, string?>
+        {
+            ["MindAttic:Vault:LLM:ghost:apiKey"] = "   "
+        }));
+        Assert.That(store.GetKey("ghost"), Is.Null);
+    }
 }

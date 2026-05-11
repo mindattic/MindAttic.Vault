@@ -170,4 +170,215 @@ public class CredentialStoreTests
         Assert.That(doc.RootElement.GetProperty("one").GetProperty("apiKey").GetString(), Is.EqualTo("k1-rotated"));
         Assert.That(doc.RootElement.GetProperty("two").GetProperty("apiKey").GetString(), Is.EqualTo("k2"));
     }
+
+    // ── Constructor / argument validation ───────────────────────────────────────
+
+    [Test]
+    public void Constructor_Throws_When_Directory_Null_Or_Whitespace()
+    {
+        Assert.Throws<ArgumentException>(() => new CredentialStore(""));
+        Assert.Throws<ArgumentException>(() => new CredentialStore("   "));
+        Assert.Throws<ArgumentException>(() => new CredentialStore(null!));
+    }
+
+    [Test]
+    public void GetKey_Returns_Null_For_Empty_Provider_Id()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.GetKey(""),    Is.Null);
+        Assert.That(store.GetKey("   "), Is.Null);
+        Assert.That(store.GetKey(null!), Is.Null);
+    }
+
+    [Test]
+    public void SetKey_Throws_For_Empty_Provider_Id()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        Assert.Throws<ArgumentException>(() => store.SetKey("",    "k"));
+        Assert.Throws<ArgumentException>(() => store.SetKey("  ",  "k"));
+        Assert.Throws<ArgumentException>(() => store.SetKey(null!, "k"));
+    }
+
+    [Test]
+    public void SetKey_Treats_Null_ApiKey_As_Empty_String()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+
+        store.SetKey("acme", null!);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(tmp.Path, "providers.json")));
+        Assert.That(doc.RootElement.GetProperty("acme").GetProperty("apiKey").GetString(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void SetKey_Trims_ApiKey()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+
+        store.SetKey("acme", "  sk-padded  ");
+
+        Assert.That(store.GetKey("acme"), Is.EqualTo("sk-padded"));
+    }
+
+    // ── File precedence edge cases ──────────────────────────────────────────────
+
+    [Test]
+    public void GetKey_Ignores_Empty_KeyFile_And_Falls_Back_To_Providers_Json()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "claude.key"), "   \n");
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
+            "{ \"claude\": { \"apiKey\": \"from-providers\" } }");
+
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.GetKey("claude"), Is.EqualTo("from-providers"));
+    }
+
+    [Test]
+    public void GetKey_Returns_Null_When_Providers_Json_Has_Empty_ApiKey()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
+            "{ \"claude\": { \"type\": \"anthropic\", \"apiKey\": \"\" } }");
+
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.GetKey("claude"), Is.Null);
+    }
+
+    [Test]
+    public void GetKey_Survives_Top_Level_Array_In_Providers_Json()
+    {
+        using var tmp = new TempDirectory();
+        // A top-level array is invalid for our schema; should be treated as "no data".
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"), "[ 1, 2, 3 ]");
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.GetKey("claude"), Is.Null);
+    }
+
+    [Test]
+    public void GetKey_Skips_Non_Object_Provider_Entries_In_Providers_Json()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
+            "{ \"claude\": \"not-an-object\", \"gemini\": { \"apiKey\": \"G\" } }");
+
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.GetKey("claude"), Is.Null);
+        Assert.That(store.GetKey("gemini"), Is.EqualTo("G"));
+    }
+
+    [Test]
+    public void LoadAll_Returns_Empty_When_Directory_Missing()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(Path.Combine(tmp.Path, "absent"));
+        Assert.That(store.LoadAll(), Is.Empty);
+    }
+
+    [Test]
+    public void ListProviders_Returns_Empty_When_Directory_Missing()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(Path.Combine(tmp.Path, "absent"));
+        Assert.That(store.ListProviders(), Is.Empty);
+    }
+
+    // ── Properties / file paths ─────────────────────────────────────────────────
+
+    [Test]
+    public void ProvidersFilePath_Combines_Directory_And_Filename()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.ProvidersFilePath, Is.EqualTo(Path.Combine(tmp.Path, "providers.json")));
+    }
+
+    [Test]
+    public void ProvidersFileExists_Reflects_Disk_State()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.ProvidersFileExists(), Is.False);
+
+        store.SetKey("a", "b");
+        Assert.That(store.ProvidersFileExists(), Is.True);
+    }
+
+    // ── Atomic swap behaviour ───────────────────────────────────────────────────
+
+    [Test]
+    public void SetKey_Creates_Backup_File_When_Replacing_Existing_Providers_Json()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+
+        store.SetKey("a", "1");          // first write — no backup yet.
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json.bak")), Is.False);
+
+        store.SetKey("a", "2");          // overwrite — File.Replace produces a .bak.
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json.bak")), Is.True);
+    }
+
+    [Test]
+    public void SaveRaw_Normalises_Empty_Json_To_Empty_Object()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+
+        store.SaveRaw("acme", "");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(tmp.Path, "providers.json")));
+        var entry = doc.RootElement.GetProperty("acme");
+        Assert.That(entry.ValueKind,                          Is.EqualTo(JsonValueKind.Object));
+        Assert.That(entry.EnumerateObject().Count(),          Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SaveRaw_Empty_Provider_Id_Is_NoOp()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        store.SaveRaw("",   "{}");
+        store.SaveRaw("  ", "{}");
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json")), Is.False);
+    }
+
+    [Test]
+    public void SaveAllRaw_Null_Map_Is_NoOp()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        store.SaveAllRaw(null!);
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json")), Is.False);
+    }
+
+    [Test]
+    public void LoadAllRaw_Returns_Empty_When_File_Missing()
+    {
+        using var tmp = new TempDirectory();
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.LoadAllRaw(), Is.Empty);
+    }
+
+    [Test]
+    public void LoadAllRaw_Survives_Malformed_Providers_Json()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"), "{ this is not json");
+        var store = new CredentialStore(tmp.Path);
+        Assert.That(store.LoadAllRaw(), Is.Empty);
+    }
+
+    [Test]
+    public void Constants_Are_Stable_Public_Surface()
+    {
+        // Other libraries pin to these names; renaming would be a breaking change.
+        Assert.That(CredentialStore.ProvidersJsonFile,   Is.EqualTo("providers.json"));
+        Assert.That(CredentialStore.CredentialsJsonFile, Is.EqualTo("credentials.json"));
+        Assert.That(CredentialStore.KeyFileExtension,    Is.EqualTo(".key"));
+    }
 }

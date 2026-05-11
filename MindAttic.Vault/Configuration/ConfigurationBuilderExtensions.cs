@@ -3,9 +3,10 @@ using Microsoft.Extensions.Configuration;
 namespace MindAttic.Vault.Configuration;
 
 /// <summary>
-/// Hook MindAttic's existing on-disk credential files into the IConfiguration
-/// pipeline so legacy keys at <c>%APPDATA%\MindAttic\&lt;bucket&gt;\providers.json</c>
-/// surface alongside User Secrets, env vars, and Azure Key Vault.
+/// Hook MindAttic's existing on-disk credential files into the
+/// <see cref="IConfiguration"/> pipeline so legacy keys at
+/// <c>%APPDATA%\MindAttic\&lt;bucket&gt;\providers.json</c> surface alongside
+/// User Secrets, env vars, and Azure Key Vault.
 /// </summary>
 public static class ConfigurationBuilderExtensions
 {
@@ -21,6 +22,14 @@ public static class ConfigurationBuilderExtensions
     ///     .AddAzureKeyVault(...);             // optional, Azure-only
     /// </code>
     /// </summary>
+    /// <param name="builder">The configuration builder. Required.</param>
+    /// <param name="configure">
+    /// Optional callback to mutate the source before it's added — e.g. set
+    /// <see cref="MindAtticConfigurationSource.Buckets"/> or enable
+    /// <see cref="MindAtticConfigurationSource.ReloadOnChange"/>.
+    /// </param>
+    /// <returns>The same <paramref name="builder"/> for fluent chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     public static IConfigurationBuilder AddMindAtticVaultFiles(
         this IConfigurationBuilder builder,
         Action<MindAtticConfigurationSource>? configure = null)

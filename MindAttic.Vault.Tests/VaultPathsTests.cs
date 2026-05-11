@@ -81,4 +81,38 @@ public class VaultPathsTests
         Assert.Throws<ArgumentException>(() => VaultPaths.RoamingBucket(""));
         Assert.Throws<ArgumentException>(() => VaultPaths.RoamingBucket("   "));
     }
+
+    [Test]
+    public void LocalApp_Throws_For_Empty_App()
+    {
+        Assert.Throws<ArgumentException>(() => VaultPaths.LocalApp(""));
+        Assert.Throws<ArgumentException>(() => VaultPaths.LocalApp("   "));
+        Assert.Throws<ArgumentException>(() => VaultPaths.LocalApp(null!));
+    }
+
+    [Test]
+    public void Ensure_Throws_For_Empty_Path()
+    {
+        Assert.Throws<ArgumentException>(() => VaultPaths.Ensure(""));
+        Assert.Throws<ArgumentException>(() => VaultPaths.Ensure("   "));
+        Assert.Throws<ArgumentException>(() => VaultPaths.Ensure(null!));
+    }
+
+    [Test]
+    public void LocalRoot_Defaults_To_LocalAppData_MindAttic_When_Env_Unset()
+    {
+        Environment.SetEnvironmentVariable(VaultPaths.LocalRootEnvVar, null);
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            VaultPaths.MindAtticFolder);
+        Assert.That(VaultPaths.LocalRoot, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Constants_Are_Stable()
+    {
+        Assert.That(VaultPaths.RoamingRootEnvVar, Is.EqualTo("MINDATTIC_VAULT_ROAMING_ROOT"));
+        Assert.That(VaultPaths.LocalRootEnvVar,   Is.EqualTo("MINDATTIC_VAULT_LOCAL_ROOT"));
+        Assert.That(VaultPaths.MindAtticFolder,   Is.EqualTo("MindAttic"));
+    }
 }

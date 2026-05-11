@@ -83,6 +83,61 @@ public class LlmCredentialStoreTests
         }
     }
 
+    [Test]
+    public void SetKey_Does_Not_Emit_Model_Or_MaxTokens_For_New_Entry()
+    {
+        using var tmp = new TempDirectory();
+        var store = new LlmCredentialStore(tmp.Path);
+        store.SetKey("claude", "sk-ant-fresh");
+
+        var entry = ReadEntry(tmp.Path, "claude");
+        Assert.That(entry.TryGetProperty("model",     out _), Is.False);
+        Assert.That(entry.TryGetProperty("maxTokens", out _), Is.False);
+    }
+
+    [Test]
+    public void SetKey_Preserves_Explicit_Type_Field()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
+            "{ \"openai\": { \"type\": \"openai\", \"apiKey\": \"old\" } }");
+
+        var store = new LlmCredentialStore(tmp.Path);
+        store.SetKey("openai", "sk-rotated");
+
+        var entry = ReadEntry(tmp.Path, "openai");
+        Assert.That(entry.GetProperty("type").GetString(),   Is.EqualTo("openai"));
+        Assert.That(entry.GetProperty("apiKey").GetString(), Is.EqualTo("sk-rotated"));
+    }
+
+    [Test]
+    public void SetKey_Survives_Malformed_Existing_Entry()
+    {
+        using var tmp = new TempDirectory();
+        // The base CredentialStore filters non-object entries during LoadProvidersRawSafe,
+        // so the "broken" provider effectively starts fresh.
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
+            "{ \"claude\": { not-json-here } }");
+
+        var store = new LlmCredentialStore(tmp.Path);
+        // Should not throw; should produce a clean entry.
+        Assert.DoesNotThrow(() => store.SetKey("claude", "sk-recovered"));
+    }
+
+    [Test]
+    public void Default_Singleton_Is_Resolvable()
+    {
+        Assert.That(LlmCredentialStore.Default, Is.Not.Null);
+        Assert.That(LlmCredentialStore.Default.Directory, Is.Not.Empty);
+    }
+
+    [Test]
+    public void Bucket_And_DirectoryEnvVar_Constants_Are_Stable()
+    {
+        Assert.That(LlmCredentialStore.Bucket,          Is.EqualTo("LLM"));
+        Assert.That(LlmCredentialStore.DirectoryEnvVar, Is.EqualTo("MINDATTIC_LLM_CREDENTIALS"));
+    }
+
     private static JsonElement ReadEntry(string dir, string providerId)
     {
         var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "providers.json")));

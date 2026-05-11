@@ -25,6 +25,13 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- Emit MindAttic.Vault.xml so consumers see IntelliSense for every documented
+         type and member. CS1591 is suppressed because "missing XML doc on public
+         member" would fire for the few internal-but-public surfaces (e.g. constants,
+         well-named records) where the type-level summary already covers them. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
