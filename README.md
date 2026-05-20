@@ -1,9 +1,18 @@
 # MindAttic.Vault
 
-> Universal credentials & settings library for the MindAttic family.
-> Cloud-native first, dev-friendly always.
+> **One credential pipeline. Every .NET host.**
+> A cloud-native credentials & settings library for .NET that gives every app one `IConfiguration`-backed pipeline for API keys, broker tokens, and per-app preferences — and keeps your legacy `%APPDATA%` keyrings working while you migrate.
 
-`MindAttic.Vault` is the one place every MindAttic application reads its credentials and per-app settings. It replaces the hand-rolled `Load() / Save() / OverlayFromEnvironment() / OverlayFromMindAtticCredentials()` code that was duplicated across nine projects and unifies the resolution chain so the same code works on a developer laptop, on Azure App Service, in an Azure Container App, or anywhere else .NET runs.
+Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in every service. `MindAttic.Vault` collapses nine flavours of credential-loading code into one library and unifies the resolution chain so the same wiring runs on a developer laptop, on Azure App Service, in an Azure Container App, on AKS, or anywhere else .NET runs.
+
+**Why MindAttic.Vault**
+
+- **One schema, every source.** Define your secrets once under `MindAttic:Vault` — User Secrets, environment variables, App Service Application Settings, and Azure Key Vault all resolve into the same shape with no code changes between environments.
+- **Cloud-native by default, zero Azure SDK in the core.** Vault reads through `IConfiguration`, so you wire `AddAzureKeyVault(...)` (or AWS Secrets Manager, or GCP Secret Manager) upstream and Vault picks up the values automatically. No vendor lock-in.
+- **Backward-compatible with `%APPDATA%`.** Legacy `providers.json` keyrings keep working — they're surfaced as a first-class `IConfigurationSource`, so the cutover is zero-risk for existing dev installs.
+- **Read-only in production, writable on the laptop.** Configuration-backed stores throw on writes; production deploys never mutate secrets at runtime. Settings UIs land safely in the file-backed fallback.
+- **Settings stay roaming, secrets stay cloud-native.** Per-app preferences (theme, layout, last-opened-file) keep following the user across machines via `%APPDATA%`; secrets follow the .NET cloud-native convention and live in `IConfiguration`.
+- **Battle-tested.** 223 NUnit tests cover every public type, including atomic writes, malformed-input recovery, and full end-to-end DI flows.
 
 | Status | 0.2.0 — built, 88 tests green, packaged at `C:\LocalNuGet\MindAttic.Vault.0.2.0.nupkg`. **Not yet integrated** into any consumer; per-project plans live in [`IntegrationPlans/`](IntegrationPlans/). |
 | --- | --- |
