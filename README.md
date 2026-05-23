@@ -12,9 +12,9 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 - **Backward-compatible with `%APPDATA%`.** Legacy `providers.json` keyrings keep working — they're surfaced as a first-class `IConfigurationSource`, so the cutover is zero-risk for existing dev installs.
 - **Read-only in production, writable on the laptop.** Configuration-backed stores throw on writes; production deploys never mutate secrets at runtime. Settings UIs land safely in the file-backed fallback.
 - **Settings stay roaming, secrets stay cloud-native.** Per-app preferences (theme, layout, last-opened-file) keep following the user across machines via `%APPDATA%`; secrets follow the .NET cloud-native convention and live in `IConfiguration`.
-- **Battle-tested.** 223 NUnit tests cover every public type, including atomic writes, malformed-input recovery, and full end-to-end DI flows.
+- **Battle-tested.** 223 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
 
-| Status | 0.2.0 — built, 88 tests green, packaged at `C:\LocalNuGet\MindAttic.Vault.0.2.0.nupkg`. **Not yet integrated** into any consumer; per-project plans live in [`IntegrationPlans/`](IntegrationPlans/). |
+| Status | **0.2.0** — published to nuget.org and `C:\LocalNuGet`. 223 NUnit tests green. **Integrated into 7 of 8 consumers** (Legion, FractionsOfACent, ThinkTank, Tutor, IdiotProof, StreetSamurai, TaxRateCollector); per-project plans live in [`IntegrationPlans/`](IntegrationPlans/). |
 | --- | --- |
 | Target framework | `net10.0` |
 | Dependencies | `Microsoft.Extensions.Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
@@ -418,7 +418,7 @@ dotnet test D:\Projects\MindAttic\MindAttic.Vault\MindAttic.Vault.slnx
 
 ## Integration plans (per-project rollout)
 
-Per the user's instruction, **no consumer is integrated yet.** Each project gets its own diff-level plan; run them in this order so each consumer can be verified in isolation:
+Every applicable consumer has now been integrated. Each project's diff-level plan ran in this order so each consumer could be verified in isolation:
 
 | # | Project | Plan | Notes |
 | --- | --- | --- | --- |
