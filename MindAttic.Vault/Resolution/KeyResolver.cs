@@ -155,12 +155,28 @@ public sealed class KeyResolver
     /// </summary>
     private static string NormaliseToEnvName(string id)
     {
-        Span<char> buf = stackalloc char[id.Length];
+        // Cap stackalloc — a pathologically long id (from a misconfigured caller)
+        // shouldn't be able to blow the stack. 256 chars covers every realistic
+        // provider id; longer ids fall through to a heap allocation.
+        const int StackThreshold = 256;
+        if (id.Length <= StackThreshold)
+        {
+            Span<char> buf = stackalloc char[id.Length];
+            NormaliseInto(id, buf);
+            return new string(buf);
+        }
+
+        var heap = new char[id.Length];
+        NormaliseInto(id, heap);
+        return new string(heap);
+    }
+
+    private static void NormaliseInto(string id, Span<char> dest)
+    {
         for (int i = 0; i < id.Length; i++)
         {
             var c = id[i];
-            buf[i] = (char.IsLetterOrDigit(c)) ? char.ToUpperInvariant(c) : '_';
+            dest[i] = char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : '_';
         }
-        return new string(buf);
     }
 }

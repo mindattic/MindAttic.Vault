@@ -292,6 +292,11 @@ public class CredentialStore : ICredentialStore
             catch { /* malformed existing entry — start clean. */ }
         }
 
+        // Strip any case-variant of "apiKey" (a hand-edited file might have "ApiKey")
+        // so we don't emit two competing properties after the canonical assignment below.
+        foreach (var k in existing.Keys.Where(k => k.Equals("apiKey", StringComparison.OrdinalIgnoreCase) && k != "apiKey").ToList())
+            existing.Remove(k);
+
         // Replace apiKey. Serialize through JsonSerializer so embedded quotes/
         // backslashes are escaped correctly.
         existing["apiKey"] = JsonSerializer.Serialize(apiKey);

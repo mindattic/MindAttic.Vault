@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using MindAttic.Vault.Configuration;
@@ -162,12 +163,13 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
 
         // Treat purely numeric keys (0, 1, 2, ...) as an array — this is the
         // standard IConfiguration array convention used by env vars and JSON
-        // sources alike.
-        var allNumeric = children.All(c => int.TryParse(c.Key, out _));
+        // sources alike. Parse with InvariantCulture so a host locale with a
+        // non-ASCII digit set can't mis-route the array detection.
+        var allNumeric = children.All(c => int.TryParse(c.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out _));
         if (allNumeric)
         {
             writer.WriteStartArray();
-            foreach (var c in children.OrderBy(c => int.Parse(c.Key)))
+            foreach (var c in children.OrderBy(c => int.Parse(c.Key, NumberStyles.Integer, CultureInfo.InvariantCulture)))
                 WriteSectionAsJson(writer, c);
             writer.WriteEndArray();
             return;
@@ -191,11 +193,12 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
     {
         if (value is null)                                          { writer.WriteNullValue(); return; }
         if (bool.TryParse(value, out var b))                        { writer.WriteBooleanValue(b); return; }
-        if (long.TryParse(value, out var l))                        { writer.WriteNumberValue(l); return; }
-        if (double.TryParse(value,
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var d))                                         { writer.WriteNumberValue(d); return; }
+        // Pin every numeric probe to InvariantCulture so a non-US host locale
+        // can't misinterpret "1,000" as a long or eat the decimal point on doubles.
+        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
+                                                                    { writer.WriteNumberValue(l); return; }
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+                                                                    { writer.WriteNumberValue(d); return; }
         writer.WriteStringValue(value);
     }
 }

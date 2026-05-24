@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
@@ -13,8 +14,16 @@ namespace MindAttic.Vault.Configuration;
 /// </summary>
 internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, IDisposable
 {
+    // Editors and OS tools fire bursts of FileSystemWatcher events for a single
+    // user-visible save (Changed + Created + Renamed). Coalesce them into one
+    // Reload so downstream IChangeToken consumers don't thunder.
+    private static readonly TimeSpan ReloadDebounce = TimeSpan.FromMilliseconds(250);
+
     private readonly MindAtticConfigurationSource source;
     private readonly List<FileSystemWatcher> watchers = new();
+    private readonly HashSet<string> watchedDirs = new(StringComparer.OrdinalIgnoreCase);
+    private System.Threading.Timer? debounceTimer;
+    private bool disposed;
 
     public MindAtticConfigurationProvider(MindAtticConfigurationSource source)
     {
@@ -30,7 +39,9 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     {
         var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var bucket in source.Buckets)
+        // Defensive: a caller can set Buckets to null via the public setter on the source.
+        var buckets = source.Buckets ?? Array.Empty<string>();
+        foreach (var bucket in buckets)
         {
             // Defensive: a misconfigured Buckets array shouldn't blow up Load.
             if (string.IsNullOrWhiteSpace(bucket)) continue;
@@ -104,7 +115,11 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     private static string? JsonValueToString(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.String => element.GetString(),
-        JsonValueKind.Number => element.TryGetInt64(out var l) ? l.ToString() : element.GetDouble().ToString(),
+        // Pin to InvariantCulture so a number written on a de-DE host doesn't surface
+        // as "3,14" and then fail to round-trip through downstream parsers.
+        JsonValueKind.Number => element.TryGetInt64(out var l)
+            ? l.ToString(CultureInfo.InvariantCulture)
+            : element.GetDouble().ToString(CultureInfo.InvariantCulture),
         JsonValueKind.True   => "true",
         JsonValueKind.False  => "false",
         JsonValueKind.Null   => null,
@@ -114,18 +129,23 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     };
 
     /// <summary>
-    /// Sets up one <see cref="FileSystemWatcher"/> per existing bucket directory.
-    /// Watcher creation is best-effort — a bucket whose directory doesn't yet
-    /// exist (or is unwatchable) is silently skipped.
+    /// Sets up one <see cref="FileSystemWatcher"/> per existing bucket directory
+    /// that isn't already being watched. Watcher creation is best-effort — a bucket
+    /// whose directory doesn't yet exist (or is unwatchable) is silently skipped,
+    /// but a subsequent <see cref="Load"/> after the directory is created will
+    /// pick it up.
     /// </summary>
     private void EnsureWatchers()
     {
-        if (watchers.Count > 0) return;
-        foreach (var bucket in source.Buckets)
+        var buckets = source.Buckets ?? Array.Empty<string>();
+        foreach (var bucket in buckets)
         {
             if (string.IsNullOrWhiteSpace(bucket)) continue;
             var bucketDir = Path.Combine(source.EffectiveRoot, bucket);
             if (!Directory.Exists(bucketDir)) continue;
+            // Skip buckets we already have a live watcher for — but newly-created
+            // bucket dirs (that didn't exist on the first Load) will fall through.
+            if (!watchedDirs.Add(bucketDir)) continue;
 
             try
             {
@@ -134,16 +154,31 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
                     EnableRaisingEvents = true,
                     NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
                 };
-                // Any change kicks a full reload — coarse but simple, and the
-                // dataset is tiny enough that a re-parse is cheap.
-                watcher.Changed += (_, _) => Reload();
-                watcher.Created += (_, _) => Reload();
-                watcher.Deleted += (_, _) => Reload();
-                watcher.Renamed += (_, _) => Reload();
+                // Any change schedules a debounced reload — a single editor save
+                // typically fires Changed + Created + Renamed in quick succession,
+                // and we don't want to re-scan and fan-out OnReload() three times.
+                watcher.Changed += (_, _) => ScheduleReload();
+                watcher.Created += (_, _) => ScheduleReload();
+                watcher.Deleted += (_, _) => ScheduleReload();
+                watcher.Renamed += (_, _) => ScheduleReload();
                 watchers.Add(watcher);
             }
-            catch { /* watching is best-effort */ }
+            catch
+            {
+                // Watching failed — drop the dir from the tracked set so a later
+                // Load can retry (e.g., after a permissions change).
+                watchedDirs.Remove(bucketDir);
+            }
         }
+    }
+
+    private void ScheduleReload()
+    {
+        if (disposed) return;
+        // Single timer, reset on every event — fires once after the burst settles.
+        var timer = debounceTimer ??= new System.Threading.Timer(
+            _ => { if (!disposed) Reload(); }, null, Timeout.Infinite, Timeout.Infinite);
+        timer.Change(ReloadDebounce, Timeout.InfiniteTimeSpan);
     }
 
     private void Reload()
@@ -155,10 +190,14 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// <summary>Disposes every <see cref="FileSystemWatcher"/> attached to this provider.</summary>
     public void Dispose()
     {
+        disposed = true;
+        try { debounceTimer?.Dispose(); } catch { /* best-effort cleanup */ }
+        debounceTimer = null;
         foreach (var w in watchers)
         {
             try { w.Dispose(); } catch { /* best-effort cleanup */ }
         }
         watchers.Clear();
+        watchedDirs.Clear();
     }
 }

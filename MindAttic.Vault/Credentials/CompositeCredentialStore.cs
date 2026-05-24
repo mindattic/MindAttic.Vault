@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace MindAttic.Vault.Credentials;
 
 /// <summary>
@@ -110,9 +113,17 @@ public class CompositeCredentialStore : ICredentialStore
     public List<string> ListProviders() => LoadAll().Keys.ToList();
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Deep-merges per-provider entries field-by-field across layers: higher-priority
+    /// fields override lower-priority fields, but fields only present in a lower
+    /// layer are preserved. So a configuration store with just <c>apiKey</c> on
+    /// top of a file store with <c>{apiKey, type, model, maxTokens}</c> yields the
+    /// rich record with the config's apiKey winning — what cloud-native callers expect.
+    /// </remarks>
     public Dictionary<string, string> LoadAllRaw()
     {
-        // Same reverse-walk strategy as LoadAll: highest-priority entry wins.
+        // Walk in reverse (lowest priority first) so each iteration merges a higher-
+        // priority layer over the accumulated result.
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = stores.Count - 1; i >= 0; i--)
         {
@@ -121,10 +132,42 @@ public class CompositeCredentialStore : ICredentialStore
             catch { layer = null; }
             if (layer is null) continue;
             foreach (var kv in layer)
-                if (!string.IsNullOrWhiteSpace(kv.Value))
-                    result[kv.Key] = kv.Value;
+            {
+                if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+                result[kv.Key] = result.TryGetValue(kv.Key, out var existing)
+                    ? MergeProviderJson(lowerPriority: existing, higherPriority: kv.Value)
+                    : kv.Value;
+            }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Shallow-merge two per-provider JSON objects: <paramref name="higherPriority"/>'s
+    /// fields override <paramref name="lowerPriority"/>'s, but fields unique to the
+    /// lower layer are kept. If either side isn't a JSON object, the higher-priority
+    /// raw text wins (matches the documented "earlier store wins" contract for
+    /// malformed entries).
+    /// </summary>
+    private static string MergeProviderJson(string lowerPriority, string higherPriority)
+    {
+        try
+        {
+            if (JsonNode.Parse(lowerPriority)  is not JsonObject lo) return higherPriority;
+            if (JsonNode.Parse(higherPriority) is not JsonObject hi) return higherPriority;
+
+            foreach (var prop in hi)
+            {
+                // Detach the node from its current parent before re-parenting to lo.
+                var clone = prop.Value?.DeepClone();
+                lo[prop.Key] = clone;
+            }
+            return lo.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return higherPriority;
+        }
     }
 
     /// <inheritdoc />

@@ -163,7 +163,15 @@ public class JsonSettingsStore<T> where T : class, new()
         {
             System.IO.Directory.CreateDirectory(Directory);
             var json = JsonSerializer.Serialize(settings, jsonOptions);
-            File.WriteAllText(FilePath, json);
+
+            // Atomic swap: a reader process must never see a half-written settings.json
+            // (which would parse-fail and silently report defaults).
+            var tempPath = FilePath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            if (File.Exists(FilePath))
+                File.Replace(tempPath, FilePath, FilePath + ".bak");
+            else
+                File.Move(tempPath, FilePath);
         }
     }
 

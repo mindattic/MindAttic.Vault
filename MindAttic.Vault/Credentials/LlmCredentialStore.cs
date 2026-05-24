@@ -75,7 +75,8 @@ public sealed class LlmCredentialStore : CredentialStore
                 {
                     if (doc.RootElement.TryGetProperty("type",      out var t)  && t.ValueKind  == JsonValueKind.String) type      = t.GetString();
                     if (doc.RootElement.TryGetProperty("model",     out var m)  && m.ValueKind  == JsonValueKind.String) model     = m.GetString();
-                    if (doc.RootElement.TryGetProperty("maxTokens", out var mt) && mt.ValueKind == JsonValueKind.Number) maxTokens = mt.GetInt32();
+                    // TryGetInt32 — a value > int.MaxValue used to throw and lose every other preserved field.
+                    if (doc.RootElement.TryGetProperty("maxTokens", out var mt) && mt.ValueKind == JsonValueKind.Number && mt.TryGetInt32(out var mtVal)) maxTokens = mtVal;
                 }
             }
             catch { /* malformed entry — fall back to inferred defaults below. */ }
