@@ -22,6 +22,10 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     private readonly MindAtticConfigurationSource source;
     private readonly List<FileSystemWatcher> watchers = new();
     private readonly HashSet<string> watchedDirs = new(StringComparer.OrdinalIgnoreCase);
+    // Guards debounceTimer + the disposed flag together — a watcher event firing
+    // mid-Dispose must not be able to allocate a fresh timer after we've already
+    // disposed the old one.
+    private readonly object timerLock = new();
     private System.Threading.Timer? debounceTimer;
     private bool disposed;
 
@@ -174,11 +178,28 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
 
     private void ScheduleReload()
     {
-        if (disposed) return;
-        // Single timer, reset on every event — fires once after the burst settles.
-        var timer = debounceTimer ??= new System.Threading.Timer(
-            _ => { if (!disposed) Reload(); }, null, Timeout.Infinite, Timeout.Infinite);
-        timer.Change(ReloadDebounce, Timeout.InfiniteTimeSpan);
+        lock (timerLock)
+        {
+            if (disposed) return;
+            // Single timer, reset on every event — fires once after the burst settles.
+            // Both the check above and the timer creation are inside timerLock so a
+            // watcher event racing with Dispose can't allocate a fresh timer after
+            // the old one was already torn down.
+            debounceTimer ??= new System.Threading.Timer(
+                OnDebounceTick, null, Timeout.Infinite, Timeout.Infinite);
+            debounceTimer.Change(ReloadDebounce, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    // Timer callback runs on a ThreadPool thread — re-check disposed under the
+    // same lock that protects Dispose so we never call Reload() on a torn-down provider.
+    private void OnDebounceTick(object? _)
+    {
+        lock (timerLock)
+        {
+            if (disposed) return;
+        }
+        Reload();
     }
 
     private void Reload()
@@ -190,9 +211,14 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// <summary>Disposes every <see cref="FileSystemWatcher"/> attached to this provider.</summary>
     public void Dispose()
     {
-        disposed = true;
-        try { debounceTimer?.Dispose(); } catch { /* best-effort cleanup */ }
-        debounceTimer = null;
+        // Stop any further watcher → timer scheduling first, then tear down the
+        // timer itself under the same lock so a racing event can't resurrect it.
+        lock (timerLock)
+        {
+            disposed = true;
+            try { debounceTimer?.Dispose(); } catch { /* best-effort cleanup */ }
+            debounceTimer = null;
+        }
         foreach (var w in watchers)
         {
             try { w.Dispose(); } catch { /* best-effort cleanup */ }

@@ -159,10 +159,18 @@ public sealed class BrokerCredentialStore : CredentialStore
         SaveRaw(providerId, System.Text.Encoding.UTF8.GetString(ms.ToArray()));
     }
 
+    // Canonical broker fields. Anything outside this set is preserved verbatim
+    // so a caller can add per-broker extras (orgId, accountId, ...) without
+    // losing them on the next key rotation.
+    private static readonly HashSet<string> CanonicalFields =
+        new(StringComparer.OrdinalIgnoreCase) { "type", "apiKey", "secret", "baseUrl" };
+
     /// <summary>
     /// Preserves <c>type</c>, <c>secret</c>, and <c>baseUrl</c> when only the
     /// <c>apiKey</c> is being rotated through the generic
-    /// <see cref="CredentialStore.SetKey"/> path.
+    /// <see cref="CredentialStore.SetKey"/> path. User-added fields outside the
+    /// canonical {type, apiKey, secret, baseUrl} set are preserved verbatim,
+    /// matching the base <see cref="CredentialStore"/> contract.
     /// </summary>
     /// <inheritdoc />
     protected override string MergeApiKeyIntoProviderJson(string? existingJson, string providerId, string apiKey)
@@ -170,6 +178,7 @@ public sealed class BrokerCredentialStore : CredentialStore
         string? type    = null;
         string? secret  = null;
         string? baseUrl = null;
+        var extras = new List<KeyValuePair<string, string>>();
 
         if (!string.IsNullOrWhiteSpace(existingJson))
         {
@@ -178,9 +187,14 @@ public sealed class BrokerCredentialStore : CredentialStore
                 using var doc = JsonDocument.Parse(existingJson);
                 if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 {
-                    if (doc.RootElement.TryGetProperty("type",    out var t) && t.ValueKind == JsonValueKind.String) type    = t.GetString();
-                    if (doc.RootElement.TryGetProperty("secret",  out var s) && s.ValueKind == JsonValueKind.String) secret  = s.GetString();
-                    if (doc.RootElement.TryGetProperty("baseUrl", out var b) && b.ValueKind == JsonValueKind.String) baseUrl = b.GetString();
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.NameEquals("type")    && prop.Value.ValueKind == JsonValueKind.String) type    = prop.Value.GetString();
+                        else if (prop.NameEquals("secret")  && prop.Value.ValueKind == JsonValueKind.String) secret  = prop.Value.GetString();
+                        else if (prop.NameEquals("baseUrl") && prop.Value.ValueKind == JsonValueKind.String) baseUrl = prop.Value.GetString();
+                        else if (!CanonicalFields.Contains(prop.Name))
+                            extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
+                    }
                 }
             }
             catch { /* swallow — fall back to inferred defaults. */ }
@@ -200,6 +214,12 @@ public sealed class BrokerCredentialStore : CredentialStore
             // we don't fabricate placeholders for fields the caller never set.
             if (secret  is not null) w.WriteString("secret",  secret);
             if (baseUrl is not null) w.WriteString("baseUrl", baseUrl);
+            foreach (var extra in extras)
+            {
+                w.WritePropertyName(extra.Key);
+                using var subDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(extra.Value) ? "null" : extra.Value);
+                subDoc.RootElement.WriteTo(w);
+            }
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());

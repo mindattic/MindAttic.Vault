@@ -25,9 +25,10 @@ namespace MindAttic.Vault.Credentials;
 /// <para><b>Failure handling:</b> a throwing inner store is treated as "no value"
 /// for that layer, so a misbehaving store cannot break the chain.</para>
 /// </summary>
-public class CompositeCredentialStore : ICredentialStore
+public class CompositeCredentialStore : ICredentialStore, IDisposable
 {
     private readonly IReadOnlyList<ICredentialStore> stores;
+    private bool disposed;
 
     /// <summary>Constructs a composite from a params array of inner stores.</summary>
     /// <param name="stores">
@@ -190,5 +191,28 @@ public class CompositeCredentialStore : ICredentialStore
     {
         try { return store.ProvidersFileExists(); }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// Disposes every inner store that implements <see cref="IDisposable"/>.
+    /// Non-disposable stores are skipped. Safe to call multiple times.
+    /// </summary>
+    /// <remarks>
+    /// Today every shipped store is non-disposable, but a future store wired in
+    /// (e.g. one that holds a <see cref="FileSystemWatcher"/> or an HTTP client)
+    /// would otherwise leak if the composite isn't a disposal pass-through.
+    /// </remarks>
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        foreach (var store in stores)
+        {
+            if (store is IDisposable d)
+            {
+                try { d.Dispose(); } catch { /* best-effort — one bad store can't block the rest. */ }
+            }
+        }
+        GC.SuppressFinalize(this);
     }
 }

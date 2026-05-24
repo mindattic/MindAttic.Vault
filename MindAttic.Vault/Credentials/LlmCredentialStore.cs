@@ -48,23 +48,29 @@ public sealed class LlmCredentialStore : CredentialStore
         Environment.GetEnvironmentVariable(DirectoryEnvVar)
         ?? VaultPaths.RoamingBucket(Bucket);
 
+    // Canonical LLM fields the override knows how to canonicalize. Any property
+    // outside this set is treated as user-added and preserved verbatim.
+    private static readonly HashSet<string> CanonicalFields =
+        new(StringComparer.OrdinalIgnoreCase) { "type", "apiKey", "model", "maxTokens" };
+
     /// <summary>
     /// Preserves <c>type</c>, <c>model</c>, and <c>maxTokens</c> when present.
     /// When <c>type</c> is missing, infers from provider id
     /// (<c>claude</c> → anthropic, <c>gemini</c> → google, otherwise <c>bearer</c>)
-    /// to match Legion's existing behaviour.
+    /// to match Legion's existing behaviour. User-added fields outside the
+    /// canonical {type, apiKey, model, maxTokens} set are preserved verbatim,
+    /// matching the base <see cref="CredentialStore"/> contract.
     /// </summary>
     /// <inheritdoc />
     protected override string MergeApiKeyIntoProviderJson(string? existingJson, string providerId, string apiKey)
     {
-        // Pull every preservable field out of the existing JSON. We only know
-        // about three fields explicitly; arbitrary user-added fields are dropped
-        // here (the base CredentialStore preserves them, but for LLM entries the
-        // canonical shape is {type, apiKey, model?, maxTokens?} — we deliberately
-        // canonicalize on every write to keep the on-disk file tidy).
         string? type      = null;
         string? model     = null;
         int?    maxTokens = null;
+        // Holds any property that isn't part of the canonical LLM shape so users
+        // can add arbitrary fields (organization, endpoint, etc.) without losing
+        // them on the next rotation.
+        var extras = new List<KeyValuePair<string, string>>();
 
         if (!string.IsNullOrWhiteSpace(existingJson))
         {
@@ -73,10 +79,18 @@ public sealed class LlmCredentialStore : CredentialStore
                 using var doc = JsonDocument.Parse(existingJson);
                 if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 {
-                    if (doc.RootElement.TryGetProperty("type",      out var t)  && t.ValueKind  == JsonValueKind.String) type      = t.GetString();
-                    if (doc.RootElement.TryGetProperty("model",     out var m)  && m.ValueKind  == JsonValueKind.String) model     = m.GetString();
-                    // TryGetInt32 — a value > int.MaxValue used to throw and lose every other preserved field.
-                    if (doc.RootElement.TryGetProperty("maxTokens", out var mt) && mt.ValueKind == JsonValueKind.Number && mt.TryGetInt32(out var mtVal)) maxTokens = mtVal;
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.NameEquals("type") && prop.Value.ValueKind == JsonValueKind.String)
+                            type = prop.Value.GetString();
+                        else if (prop.NameEquals("model") && prop.Value.ValueKind == JsonValueKind.String)
+                            model = prop.Value.GetString();
+                        // TryGetInt32 — a value > int.MaxValue used to throw and lose every other preserved field.
+                        else if (prop.NameEquals("maxTokens") && prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var mtVal))
+                            maxTokens = mtVal;
+                        else if (!CanonicalFields.Contains(prop.Name))
+                            extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
+                    }
                 }
             }
             catch { /* malformed entry — fall back to inferred defaults below. */ }
@@ -93,10 +107,18 @@ public sealed class LlmCredentialStore : CredentialStore
             w.WriteStartObject();
             w.WriteString("type", type);
             w.WriteString("apiKey", apiKey);
-            // Optional fields are only emitted when actually present, keeping the
-            // on-disk file lean for new providers.
+            // Optional canonical fields are only emitted when actually present,
+            // keeping the on-disk file lean for new providers.
             if (!string.IsNullOrWhiteSpace(model)) w.WriteString("model", model);
             if (maxTokens.HasValue)                w.WriteNumber("maxTokens", maxTokens.Value);
+            // User-added fields trail the canonical block so a hand-edited file
+            // stays readable (canonical keys clustered up top, extras after).
+            foreach (var extra in extras)
+            {
+                w.WritePropertyName(extra.Key);
+                using var subDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(extra.Value) ? "null" : extra.Value);
+                subDoc.RootElement.WriteTo(w);
+            }
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());

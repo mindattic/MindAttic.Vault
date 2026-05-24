@@ -37,18 +37,38 @@ public static class VaultPaths
     public const string MindAtticFolder   = "MindAttic";
 
     /// <summary>Roaming MindAttic root (defaults to <c>%APPDATA%\MindAttic</c>).</summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no <see cref="RoamingRootEnvVar"/> override is set and the OS
+    /// returns an empty path for <see cref="Environment.SpecialFolder.ApplicationData"/>
+    /// (e.g. some restricted Linux container contexts). Set the env var to recover.
+    /// </exception>
     public static string RoamingRoot =>
         Environment.GetEnvironmentVariable(RoamingRootEnvVar)
-        ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            MindAtticFolder);
+        ?? Path.Combine(ResolveSpecialFolder(Environment.SpecialFolder.ApplicationData, RoamingRootEnvVar), MindAtticFolder);
 
     /// <summary>Local MindAttic root (defaults to <c>%LOCALAPPDATA%\MindAttic</c>).</summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no <see cref="LocalRootEnvVar"/> override is set and the OS
+    /// returns an empty path for <see cref="Environment.SpecialFolder.LocalApplicationData"/>.
+    /// Set the env var to recover.
+    /// </exception>
     public static string LocalRoot =>
         Environment.GetEnvironmentVariable(LocalRootEnvVar)
-        ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            MindAtticFolder);
+        ?? Path.Combine(ResolveSpecialFolder(Environment.SpecialFolder.LocalApplicationData, LocalRootEnvVar), MindAtticFolder);
+
+    // Environment.GetFolderPath returns "" rather than throwing when the OS has
+    // no concept of the requested folder (some restricted Linux/container hosts).
+    // Surface that as a clear, actionable exception instead of silently combining
+    // into a bogus root like "MindAttic" relative to the cwd.
+    private static string ResolveSpecialFolder(Environment.SpecialFolder folder, string overrideEnvVar)
+    {
+        var path = Environment.GetFolderPath(folder);
+        if (string.IsNullOrEmpty(path))
+            throw new InvalidOperationException(
+                $"Environment.GetFolderPath({folder}) returned an empty string on this host. " +
+                $"Set the {overrideEnvVar} environment variable to an explicit directory to override.");
+        return path;
+    }
 
     /// <summary>
     /// Roaming bucket directory (e.g. <c>"LLM"</c>, <c>"Brokers"</c>, <c>"GitHub"</c>).

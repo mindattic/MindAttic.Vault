@@ -43,7 +43,10 @@ public class JsonSettingsStore<T> where T : class, new()
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly object writeLock = new();
+    // SemaphoreSlim (not a monitor) so the async overloads can await acquisition
+    // with a CancellationToken — sync and async paths share the same gate, so
+    // they're mutually exclusive against each other and against themselves.
+    private readonly SemaphoreSlim writeLock = new(1, 1);
     private readonly JsonSerializerOptions jsonOptions;
 
     /// <summary>The directory containing the settings file.</summary>
@@ -158,21 +161,80 @@ public class JsonSettingsStore<T> where T : class, new()
     public void Save(T settings)
     {
         if (settings is null) throw new ArgumentNullException(nameof(settings));
+        writeLock.Wait();
+        try { SaveLocked(settings); }
+        finally { writeLock.Release(); }
+    }
 
-        lock (writeLock)
+    /// <summary>
+    /// Async variant of <see cref="Save"/>. Honors cancellation while acquiring
+    /// the write gate and during the underlying disk write.
+    /// </summary>
+    /// <param name="settings">The settings to persist. Required.</param>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancellation is requested.</exception>
+    public async Task SaveAsync(T settings, CancellationToken cancellationToken = default)
+    {
+        if (settings is null) throw new ArgumentNullException(nameof(settings));
+        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await SaveLockedAsync(settings, cancellationToken).ConfigureAwait(false); }
+        finally { writeLock.Release(); }
+    }
+
+    // Assumes writeLock is held — the actual atomic write. Callers that already
+    // own the lock (e.g. Update) invoke this directly instead of re-entering Save,
+    // so the lock contract doesn't rely on monitor reentrancy.
+    private void SaveLocked(T settings)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        var json = JsonSerializer.Serialize(settings, jsonOptions);
+
+        // Atomic swap: a reader process must never see a half-written settings.json
+        // (which would parse-fail and silently report defaults).
+        var tempPath = FilePath + ".tmp";
+        File.WriteAllText(tempPath, json);
+        if (File.Exists(FilePath))
+            File.Replace(tempPath, FilePath, FilePath + ".bak");
+        else
+            File.Move(tempPath, FilePath);
+    }
+
+    // Async twin of SaveLocked. Caller owns the SemaphoreSlim.
+    private async Task SaveLockedAsync(T settings, CancellationToken cancellationToken)
+    {
+        System.IO.Directory.CreateDirectory(Directory);
+        var json = JsonSerializer.Serialize(settings, jsonOptions);
+
+        var tempPath = FilePath + ".tmp";
+        await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
+        // File.Replace / File.Move have no async variant in BCL; the atomic
+        // rename itself is sub-millisecond so cancellation isn't honored here.
+        if (File.Exists(FilePath))
+            File.Replace(tempPath, FilePath, FilePath + ".bak");
+        else
+            File.Move(tempPath, FilePath);
+    }
+
+    /// <summary>
+    /// Async variant of <see cref="Load"/>. Returns defaults on cancellation only
+    /// if cancellation fires after the file was already read; an early-cancelled
+    /// token still throws <see cref="OperationCanceledException"/>.
+    /// </summary>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    /// <returns>The deserialized settings, or a fresh <c>new T()</c> on any failure.</returns>
+    public async Task<T> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!File.Exists(FilePath)) return new T();
+        try
         {
-            System.IO.Directory.CreateDirectory(Directory);
-            var json = JsonSerializer.Serialize(settings, jsonOptions);
-
-            // Atomic swap: a reader process must never see a half-written settings.json
-            // (which would parse-fail and silently report defaults).
-            var tempPath = FilePath + ".tmp";
-            File.WriteAllText(tempPath, json);
-            if (File.Exists(FilePath))
-                File.Replace(tempPath, FilePath, FilePath + ".bak");
-            else
-                File.Move(tempPath, FilePath);
+            var json = await File.ReadAllTextAsync(FilePath, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(json)) return new T();
+            return JsonSerializer.Deserialize<T>(json, jsonOptions) ?? new T();
         }
+        catch (OperationCanceledException) { throw; }
+        catch { return new T(); }
     }
 
     /// <summary>
@@ -186,14 +248,57 @@ public class JsonSettingsStore<T> where T : class, new()
     public T Update(Action<T> mutate)
     {
         if (mutate is null) throw new ArgumentNullException(nameof(mutate));
-        // Hold the same lock as Save so a concurrent Update can't read a torn
-        // file or race past another thread's mutation.
-        lock (writeLock)
+        // One acquisition for the full read-modify-write — SaveLocked is called
+        // directly so we never depend on lock reentrancy.
+        writeLock.Wait();
+        try
         {
             var settings = Load();
             mutate(settings);
-            Save(settings);
+            SaveLocked(settings);
             return settings;
         }
+        finally { writeLock.Release(); }
+    }
+
+    /// <summary>
+    /// Async variant of <see cref="Update"/>. The mutator may be async; the read
+    /// and write halves are wrapped in a single semaphore acquisition so a
+    /// concurrent Update can't race past another mutation.
+    /// </summary>
+    /// <param name="mutate">The async mutation to apply. Required.</param>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    /// <returns>The saved (post-mutation) settings instance.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="mutate"/> is null.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancellation is requested.</exception>
+    public async Task<T> UpdateAsync(Func<T, CancellationToken, Task> mutate, CancellationToken cancellationToken = default)
+    {
+        if (mutate is null) throw new ArgumentNullException(nameof(mutate));
+        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var settings = await LoadAsyncLocked(cancellationToken).ConfigureAwait(false);
+            await mutate(settings, cancellationToken).ConfigureAwait(false);
+            await SaveLockedAsync(settings, cancellationToken).ConfigureAwait(false);
+            return settings;
+        }
+        finally { writeLock.Release(); }
+    }
+
+    // Lock-free Load — used inside UpdateAsync where the semaphore is already held.
+    // Logic mirrors LoadAsync exactly; extracted purely to avoid pulling the
+    // public LoadAsync's cancellation-precondition into the locked critical section
+    // (where it would already have thrown).
+    private async Task<T> LoadAsyncLocked(CancellationToken cancellationToken)
+    {
+        if (!File.Exists(FilePath)) return new T();
+        try
+        {
+            var json = await File.ReadAllTextAsync(FilePath, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(json)) return new T();
+            return JsonSerializer.Deserialize<T>(json, jsonOptions) ?? new T();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return new T(); }
     }
 }

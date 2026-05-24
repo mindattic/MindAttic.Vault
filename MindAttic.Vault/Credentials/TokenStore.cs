@@ -35,7 +35,9 @@ public sealed class TokenStore
 
     // Single-process serialisation gate. Guards both reads and writes so a Set's
     // File.Replace cannot interleave with a concurrent LoadAll on the same instance.
-    private readonly object writeLock = new();
+    // SemaphoreSlim (not a monitor) so the async overloads can await acquisition
+    // with a CancellationToken — sync and async paths share the same gate.
+    private readonly SemaphoreSlim writeLock = new(1, 1);
 
     /// <summary>The bucket directory on disk. Created on first write.</summary>
     public string Directory { get; }
@@ -80,6 +82,18 @@ public sealed class TokenStore
             : null;
     }
 
+    /// <summary>Async variant of <see cref="Get"/> honoring cancellation.</summary>
+    /// <param name="name">Logical token name. Case-insensitive.</param>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    public async Task<string?> GetAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var all = await LoadAllAsync(cancellationToken).ConfigureAwait(false);
+        return all.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+    }
+
     /// <summary>Loads every token in the file as a case-insensitive map.</summary>
     /// <returns>
     /// A case-insensitive map of token name → value. Returns an empty map for
@@ -89,27 +103,60 @@ public sealed class TokenStore
     {
         // Hold writeLock so an in-process Set's File.Replace cannot interleave with
         // this read (cross-process consistency comes from the atomic swap in WriteAll).
-        lock (writeLock)
+        writeLock.Wait();
+        try { return LoadAllLocked(); }
+        finally { writeLock.Release(); }
+    }
+
+    /// <summary>Async variant of <see cref="LoadAll"/> honoring cancellation.</summary>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    public async Task<Dictionary<string, string>> LoadAllAsync(CancellationToken cancellationToken = default)
+    {
+        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { return await LoadAllLockedAsync(cancellationToken).ConfigureAwait(false); }
+        finally { writeLock.Release(); }
+    }
+
+    // Caller owns writeLock.
+    private Dictionary<string, string> LoadAllLocked()
+    {
+        if (!File.Exists(TokensFilePath))
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
         {
-            if (!File.Exists(TokensFilePath))
-                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var raw = File.ReadAllText(TokensFilePath);
+            return ParseTokensSafe(raw);
+        }
+        catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+    }
 
-            try
-            {
-                var raw = File.ReadAllText(TokensFilePath);
-                if (string.IsNullOrWhiteSpace(raw))
-                    return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private async Task<Dictionary<string, string>> LoadAllLockedAsync(CancellationToken cancellationToken)
+    {
+        if (!File.Exists(TokensFilePath))
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var raw = await File.ReadAllTextAsync(TokensFilePath, cancellationToken).ConfigureAwait(false);
+            return ParseTokensSafe(raw);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+    }
 
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(raw)
-                             ?? new Dictionary<string, string>();
-                // Normalise to case-insensitive comparer so callers can use any casing.
-                return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                // Swallow: malformed JSON behaves the same as a missing file.
-                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            }
+    private static Dictionary<string, string> ParseTokensSafe(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(raw)
+                         ?? new Dictionary<string, string>();
+            // Normalise to case-insensitive comparer so callers can use any casing.
+            return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -122,13 +169,37 @@ public sealed class TokenStore
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Token name is required.", nameof(name));
 
-        lock (writeLock)
+        writeLock.Wait();
+        try
         {
             System.IO.Directory.CreateDirectory(Directory);
-            var all = LoadAll();
+            var all = LoadAllLocked();
             all[name] = token?.Trim() ?? "";
             WriteAll(all);
         }
+        finally { writeLock.Release(); }
+    }
+
+    /// <summary>Async variant of <see cref="Set"/> honoring cancellation.</summary>
+    /// <param name="name">Logical token name. Required.</param>
+    /// <param name="token">The token value (trimmed on write).</param>
+    /// <param name="cancellationToken">Cooperative cancellation. Optional.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is null/whitespace.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancellation is requested.</exception>
+    public async Task SetAsync(string name, string token, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Token name is required.", nameof(name));
+
+        await writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            System.IO.Directory.CreateDirectory(Directory);
+            var all = await LoadAllLockedAsync(cancellationToken).ConfigureAwait(false);
+            all[name] = token?.Trim() ?? "";
+            await WriteAllAsync(all, cancellationToken).ConfigureAwait(false);
+        }
+        finally { writeLock.Release(); }
     }
 
     /// <summary>Removes a token by name.</summary>
@@ -140,15 +211,17 @@ public sealed class TokenStore
     public bool Remove(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
-        lock (writeLock)
+        writeLock.Wait();
+        try
         {
-            var all = LoadAll();
+            var all = LoadAllLocked();
             if (!all.Remove(name)) return false;
             // Re-create the directory in case it was deleted between LoadAll and now.
             System.IO.Directory.CreateDirectory(Directory);
             WriteAll(all);
             return true;
         }
+        finally { writeLock.Release(); }
     }
 
     /// <summary>
@@ -157,23 +230,43 @@ public sealed class TokenStore
     /// </summary>
     private void WriteAll(IDictionary<string, string> tokens)
     {
-        // Sort by key for a deterministic, diff-friendly on-disk file. The inner
-        // dictionary uses Ordinal because keys at this point are already canonical
-        // (the case-insensitive comparer would treat "GitHub" and "github" as
-        // duplicates, which we don't want here — LoadAll already normalised).
+        var (tempPath, json) = PrepareWrite(tokens);
+        File.WriteAllText(tempPath, json);
+        CommitAtomicSwap(tempPath);
+    }
+
+    private async Task WriteAllAsync(IDictionary<string, string> tokens, CancellationToken cancellationToken)
+    {
+        var (tempPath, json) = PrepareWrite(tokens);
+        await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
+        // File.Replace / File.Move have no async variant; the rename itself is
+        // sub-millisecond so cancellation isn't honored here.
+        CommitAtomicSwap(tempPath);
+    }
+
+    private (string tempPath, string json) PrepareWrite(IDictionary<string, string> tokens)
+    {
+        // Sort by key for a deterministic, diff-friendly on-disk file. Use the
+        // same case-insensitive comparer as the public LoadAll contract — keys
+        // are already case-deduped via LoadAll, so any further duplicates here
+        // would be a bug we'd rather surface (last-write-wins) than silently
+        // emit two competing properties via case-sensitive insertion.
         var ordered = tokens
             .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+            .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 
         var json = JsonSerializer.Serialize(ordered, new JsonSerializerOptions
         {
             WriteIndented = true
         });
 
-        // Atomic swap: a reader process must never see a half-written tokens.json
-        // (which would parse-fail and silently report all tokens as missing).
-        var tempPath = TokensFilePath + ".tmp";
-        File.WriteAllText(tempPath, json);
+        return (TokensFilePath + ".tmp", json);
+    }
+
+    // Atomic swap: a reader process must never see a half-written tokens.json
+    // (which would parse-fail and silently report all tokens as missing).
+    private void CommitAtomicSwap(string tempPath)
+    {
         if (File.Exists(TokensFilePath))
             File.Replace(tempPath, TokensFilePath, TokensFilePath + ".bak");
         else
