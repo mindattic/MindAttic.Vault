@@ -231,17 +231,33 @@ public sealed class TokenStore
     private void WriteAll(IDictionary<string, string> tokens)
     {
         var (tempPath, json) = PrepareWrite(tokens);
-        File.WriteAllText(tempPath, json);
-        CommitAtomicSwap(tempPath);
+        try
+        {
+            File.WriteAllText(tempPath, json);
+            CommitAtomicSwap(tempPath);
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
+            throw;
+        }
     }
 
     private async Task WriteAllAsync(IDictionary<string, string> tokens, CancellationToken cancellationToken)
     {
         var (tempPath, json) = PrepareWrite(tokens);
-        await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
-        // File.Replace / File.Move have no async variant; the rename itself is
-        // sub-millisecond so cancellation isn't honored here.
-        CommitAtomicSwap(tempPath);
+        try
+        {
+            await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
+            // File.Replace / File.Move have no async variant; the rename itself is
+            // sub-millisecond so cancellation isn't honored here.
+            CommitAtomicSwap(tempPath);
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
+            throw;
+        }
     }
 
     private (string tempPath, string json) PrepareWrite(IDictionary<string, string> tokens)
@@ -260,7 +276,10 @@ public sealed class TokenStore
             WriteIndented = true
         });
 
-        return (TokensFilePath + ".tmp", json);
+        // Unique temp name per write so two concurrent writers (separate instances
+        // or processes — neither guarded by this instance's writeLock) can't clobber
+        // a shared "tokens.json.tmp" and race the swap.
+        return (TokensFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp", json);
     }
 
     // Atomic swap: a reader process must never see a half-written tokens.json

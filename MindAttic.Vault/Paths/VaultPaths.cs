@@ -43,7 +43,7 @@ public static class VaultPaths
     /// (e.g. some restricted Linux container contexts). Set the env var to recover.
     /// </exception>
     public static string RoamingRoot =>
-        Environment.GetEnvironmentVariable(RoamingRootEnvVar)
+        NonBlankEnv(RoamingRootEnvVar)
         ?? Path.Combine(ResolveSpecialFolder(Environment.SpecialFolder.ApplicationData, RoamingRootEnvVar), MindAtticFolder);
 
     /// <summary>Local MindAttic root (defaults to <c>%LOCALAPPDATA%\MindAttic</c>).</summary>
@@ -53,8 +53,18 @@ public static class VaultPaths
     /// Set the env var to recover.
     /// </exception>
     public static string LocalRoot =>
-        Environment.GetEnvironmentVariable(LocalRootEnvVar)
+        NonBlankEnv(LocalRootEnvVar)
         ?? Path.Combine(ResolveSpecialFolder(Environment.SpecialFolder.LocalApplicationData, LocalRootEnvVar), MindAtticFolder);
+
+    // An override env var explicitly set to "" or whitespace (possible on non-Windows
+    // hosts, where setting an empty value doesn't unset the variable) must be treated
+    // as unset — otherwise the ?? fallback is bypassed and Path.Combine would turn the
+    // blank root into a relative/bogus path instead of the intended app-data location.
+    private static string? NonBlankEnv(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 
     // Environment.GetFolderPath returns "" rather than throwing when the OS has
     // no concept of the requested folder (some restricted Linux/container hosts).

@@ -157,7 +157,7 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
         // A section with no children is a leaf — write the value (or null).
         if (children.Count == 0)
         {
-            WriteScalar(writer, section.Value);
+            WriteScalar(writer, section.Key, section.Value);
             return;
         }
 
@@ -184,14 +184,29 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
         writer.WriteEndObject();
     }
 
+    // Fields that are semantically credential strings and must never be retyped.
+    // Configuration only ever stores strings, so an all-digit secret/apiKey or a
+    // "true"-valued token would otherwise be emitted as a JSON number/boolean and
+    // then dropped by string-typed readers (e.g. BrokerCredentialStore.GetBrokerCreds,
+    // ExtractApiKeyFromProviderJson). The file-backed store preserves these as
+    // strings verbatim; the configuration path must match.
+    private static readonly HashSet<string> StringOnlyFields =
+        new(StringComparer.OrdinalIgnoreCase) { "apiKey", "secret", "baseUrl", "token" };
+
     /// <summary>
     /// Writes a configuration leaf value with type inference: bool → boolean,
     /// integer string → number, numeric string → number, otherwise string.
-    /// Null values are written as JSON null.
+    /// Null values are written as JSON null. Known credential fields
+    /// (<paramref name="fieldName"/> in <see cref="StringOnlyFields"/>) bypass
+    /// inference and are always written as strings.
     /// </summary>
-    private static void WriteScalar(Utf8JsonWriter writer, string? value)
+    private static void WriteScalar(Utf8JsonWriter writer, string? fieldName, string? value)
     {
         if (value is null)                                          { writer.WriteNullValue(); return; }
+        // Credential-bearing fields are always strings — never infer a numeric or
+        // boolean type that a downstream string-typed reader would reject.
+        if (fieldName is not null && StringOnlyFields.Contains(fieldName))
+                                                                    { writer.WriteStringValue(value); return; }
         if (bool.TryParse(value, out var b))                        { writer.WriteBooleanValue(b); return; }
         // Pin every numeric probe to InvariantCulture so a non-US host locale
         // can't misinterpret "1,000" as a long or eat the decimal point on doubles.

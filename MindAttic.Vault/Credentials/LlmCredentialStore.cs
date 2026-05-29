@@ -44,9 +44,14 @@ public sealed class LlmCredentialStore : CredentialStore
     /// <inheritdoc />
     public LlmCredentialStore(string directory) : base(directory) { }
 
-    private static string ResolveDefaultDirectory() =>
-        Environment.GetEnvironmentVariable(DirectoryEnvVar)
-        ?? VaultPaths.RoamingBucket(Bucket);
+    private static string ResolveDefaultDirectory()
+    {
+        // Treat a blank override (env var set to "" / whitespace) as unset: a plain
+        // ?? would pass the blank straight into the base ctor's IsNullOrWhiteSpace
+        // guard, throwing a TypeInitializationException the first time Default is touched.
+        var overrideDir = Environment.GetEnvironmentVariable(DirectoryEnvVar);
+        return string.IsNullOrWhiteSpace(overrideDir) ? VaultPaths.RoamingBucket(Bucket) : overrideDir;
+    }
 
     // Canonical LLM fields the override knows how to canonicalize. Any property
     // outside this set is treated as user-added and preserved verbatim.
@@ -85,9 +90,18 @@ public sealed class LlmCredentialStore : CredentialStore
                             type = prop.Value.GetString();
                         else if (prop.NameEquals("model") && prop.Value.ValueKind == JsonValueKind.String)
                             model = prop.Value.GetString();
-                        // TryGetInt32 — a value > int.MaxValue used to throw and lose every other preserved field.
-                        else if (prop.NameEquals("maxTokens") && prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var mtVal))
-                            maxTokens = mtVal;
+                        else if (prop.NameEquals("maxTokens"))
+                        {
+                            // Canonicalize a proper Int32; otherwise (a string-typed
+                            // hand-edit, or a value > int.MaxValue) preserve the field
+                            // verbatim as an extra rather than silently dropping it —
+                            // falling through to the CanonicalFields guard below would
+                            // discard it, since "maxTokens" is itself a canonical name.
+                            if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var mtVal))
+                                maxTokens = mtVal;
+                            else
+                                extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
+                        }
                         else if (!CanonicalFields.Contains(prop.Name))
                             extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
                     }

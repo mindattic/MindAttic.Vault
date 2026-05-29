@@ -351,12 +351,25 @@ public class CredentialStore : ICredentialStore
 
         // Atomic swap: a reader process must never see a half-written providers.json
         // (which would parse-fail and silently report all credentials as missing).
-        var tempPath = ProvidersFilePath + ".tmp";
-        File.WriteAllBytes(tempPath, ms.ToArray());
-        if (File.Exists(ProvidersFilePath))
-            File.Replace(tempPath, ProvidersFilePath, ProvidersFilePath + ".bak");
-        else
-            File.Move(tempPath, ProvidersFilePath);
+        // Use a unique temp name per write — a fixed "providers.json.tmp" would let
+        // two concurrent writers (separate instances, or separate processes — the
+        // in-process writeLock guards neither) clobber each other's temp file and
+        // race the swap, defeating the very atomicity this dance exists to provide.
+        var tempPath = ProvidersFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllBytes(tempPath, ms.ToArray());
+            if (File.Exists(ProvidersFilePath))
+                File.Replace(tempPath, ProvidersFilePath, ProvidersFilePath + ".bak");
+            else
+                File.Move(tempPath, ProvidersFilePath);
+        }
+        catch
+        {
+            // Never leave an orphan temp behind if the write/swap failed.
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
+            throw;
+        }
     }
 
     // ── small helpers ───────────────────────────────────────────────────────────
@@ -377,12 +390,19 @@ public class CredentialStore : ICredentialStore
         try
         {
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json)
-                   ?? new Dictionary<string, string>();
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            // Re-wrap with a case-insensitive comparer so legacy credentials.json
+            // lookups honour the case-insensitive provider-id contract documented
+            // on ICredentialStore.GetKey (the .key and providers.json layers already
+            // resolve case-insensitively; this layer must match). A plain
+            // Deserialize yields an Ordinal/case-sensitive map.
+            return parsed is null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
         }
         catch
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

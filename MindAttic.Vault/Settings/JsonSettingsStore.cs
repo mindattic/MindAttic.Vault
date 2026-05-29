@@ -191,13 +191,24 @@ public class JsonSettingsStore<T> where T : class, new()
         var json = JsonSerializer.Serialize(settings, jsonOptions);
 
         // Atomic swap: a reader process must never see a half-written settings.json
-        // (which would parse-fail and silently report defaults).
-        var tempPath = FilePath + ".tmp";
-        File.WriteAllText(tempPath, json);
-        if (File.Exists(FilePath))
-            File.Replace(tempPath, FilePath, FilePath + ".bak");
-        else
-            File.Move(tempPath, FilePath);
+        // (which would parse-fail and silently report defaults). The temp name is
+        // unique per write so two concurrent writers (separate instances/processes,
+        // neither guarded by this instance's writeLock) can't clobber a shared
+        // "settings.json.tmp" and race the swap.
+        var tempPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, json);
+            if (File.Exists(FilePath))
+                File.Replace(tempPath, FilePath, FilePath + ".bak");
+            else
+                File.Move(tempPath, FilePath);
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
+            throw;
+        }
     }
 
     // Async twin of SaveLocked. Caller owns the SemaphoreSlim.
@@ -206,14 +217,23 @@ public class JsonSettingsStore<T> where T : class, new()
         System.IO.Directory.CreateDirectory(Directory);
         var json = JsonSerializer.Serialize(settings, jsonOptions);
 
-        var tempPath = FilePath + ".tmp";
-        await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
-        // File.Replace / File.Move have no async variant in BCL; the atomic
-        // rename itself is sub-millisecond so cancellation isn't honored here.
-        if (File.Exists(FilePath))
-            File.Replace(tempPath, FilePath, FilePath + ".bak");
-        else
-            File.Move(tempPath, FilePath);
+        // Unique temp name per write — see SaveLocked for the concurrent-writer rationale.
+        var tempPath = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(tempPath, json, cancellationToken).ConfigureAwait(false);
+            // File.Replace / File.Move have no async variant in BCL; the atomic
+            // rename itself is sub-millisecond so cancellation isn't honored here.
+            if (File.Exists(FilePath))
+                File.Replace(tempPath, FilePath, FilePath + ".bak");
+            else
+                File.Move(tempPath, FilePath);
+        }
+        catch
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
+            throw;
+        }
     }
 
     /// <summary>

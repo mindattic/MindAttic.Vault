@@ -147,31 +147,45 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             if (string.IsNullOrWhiteSpace(bucket)) continue;
             var bucketDir = Path.Combine(source.EffectiveRoot, bucket);
             if (!Directory.Exists(bucketDir)) continue;
-            // Skip buckets we already have a live watcher for — but newly-created
-            // bucket dirs (that didn't exist on the first Load) will fall through.
-            if (!watchedDirs.Add(bucketDir)) continue;
 
-            try
+            // Mutate the watcher collections under timerLock: Load (hence
+            // EnsureWatchers) can run on a ThreadPool thread via Reload, and that
+            // must not race Dispose's iterate-and-clear of the same lists.
+            lock (timerLock)
             {
-                var watcher = new FileSystemWatcher(bucketDir)
+                // Don't wire new watchers onto a provider that's already torn down.
+                if (disposed) return;
+                // Skip buckets we already have a live watcher for — but newly-created
+                // bucket dirs (that didn't exist on the first Load) will fall through.
+                if (!watchedDirs.Add(bucketDir)) continue;
+
+                FileSystemWatcher? watcher = null;
+                try
                 {
-                    EnableRaisingEvents = true,
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
-                };
-                // Any change schedules a debounced reload — a single editor save
-                // typically fires Changed + Created + Renamed in quick succession,
-                // and we don't want to re-scan and fan-out OnReload() three times.
-                watcher.Changed += (_, _) => ScheduleReload();
-                watcher.Created += (_, _) => ScheduleReload();
-                watcher.Deleted += (_, _) => ScheduleReload();
-                watcher.Renamed += (_, _) => ScheduleReload();
-                watchers.Add(watcher);
-            }
-            catch
-            {
-                // Watching failed — drop the dir from the tracked set so a later
-                // Load can retry (e.g., after a permissions change).
-                watchedDirs.Remove(bucketDir);
+                    watcher = new FileSystemWatcher(bucketDir)
+                    {
+                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
+                    };
+                    // Any change schedules a debounced reload — a single editor save
+                    // typically fires Changed + Created + Renamed in quick succession,
+                    // and we don't want to re-scan and fan-out OnReload() three times.
+                    // Subscribe BEFORE enabling events so a change landing during
+                    // setup can't slip through unobserved.
+                    watcher.Changed += (_, _) => ScheduleReload();
+                    watcher.Created += (_, _) => ScheduleReload();
+                    watcher.Deleted += (_, _) => ScheduleReload();
+                    watcher.Renamed += (_, _) => ScheduleReload();
+                    watcher.EnableRaisingEvents = true;
+                    watchers.Add(watcher);
+                }
+                catch
+                {
+                    // Watching failed — dispose the partial watcher and drop the dir
+                    // from the tracked set so a later Load can retry (e.g., after a
+                    // permissions change).
+                    try { watcher?.Dispose(); } catch { /* best-effort */ }
+                    watchedDirs.Remove(bucketDir);
+                }
             }
         }
     }
@@ -218,12 +232,17 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             disposed = true;
             try { debounceTimer?.Dispose(); } catch { /* best-effort cleanup */ }
             debounceTimer = null;
+
+            // Tear down watchers under the same lock that guards EnsureWatchers, so a
+            // concurrent Reload→Load→EnsureWatchers can't mutate these collections
+            // while we iterate/clear them (and, having set disposed above, any such
+            // call now bails out before adding a fresh watcher).
+            foreach (var w in watchers)
+            {
+                try { w.Dispose(); } catch { /* best-effort cleanup */ }
+            }
+            watchers.Clear();
+            watchedDirs.Clear();
         }
-        foreach (var w in watchers)
-        {
-            try { w.Dispose(); } catch { /* best-effort cleanup */ }
-        }
-        watchers.Clear();
-        watchedDirs.Clear();
     }
 }

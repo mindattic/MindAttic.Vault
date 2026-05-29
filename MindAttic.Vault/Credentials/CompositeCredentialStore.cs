@@ -28,7 +28,9 @@ namespace MindAttic.Vault.Credentials;
 public class CompositeCredentialStore : ICredentialStore, IDisposable
 {
     private readonly IReadOnlyList<ICredentialStore> stores;
-    private bool disposed;
+    // int (not bool) so Dispose can flip it atomically — two concurrent Dispose()
+    // calls must not both pass the guard and double-dispose the inner stores.
+    private int disposed;
 
     /// <summary>Constructs a composite from a params array of inner stores.</summary>
     /// <param name="stores">
@@ -204,8 +206,8 @@ public class CompositeCredentialStore : ICredentialStore, IDisposable
     /// </remarks>
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
+        // Atomic compare-and-set: only the first caller runs the teardown body.
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         foreach (var store in stores)
         {
             if (store is IDisposable d)

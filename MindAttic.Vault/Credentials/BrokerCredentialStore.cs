@@ -41,9 +41,14 @@ public sealed class BrokerCredentialStore : CredentialStore
     /// <inheritdoc />
     public BrokerCredentialStore(string directory) : base(directory) { }
 
-    private static string ResolveDefaultDirectory() =>
-        Environment.GetEnvironmentVariable(DirectoryEnvVar)
-        ?? VaultPaths.RoamingBucket(Bucket);
+    private static string ResolveDefaultDirectory()
+    {
+        // Treat a blank override (env var set to "" / whitespace) as unset: a plain
+        // ?? would pass the blank straight into the base ctor's IsNullOrWhiteSpace
+        // guard, throwing a TypeInitializationException the first time Default is touched.
+        var overrideDir = Environment.GetEnvironmentVariable(DirectoryEnvVar);
+        return string.IsNullOrWhiteSpace(overrideDir) ? VaultPaths.RoamingBucket(Bucket) : overrideDir;
+    }
 
     /// <summary>Strongly-typed broker credentials.</summary>
     /// <param name="ApiKey">The broker API key. Required (non-empty).</param>
@@ -125,22 +130,30 @@ public sealed class BrokerCredentialStore : CredentialStore
         if (creds is null) throw new ArgumentNullException(nameof(creds));
 
         // Read the existing entry so we can preserve a custom 'type' (e.g. a
-        // broker-specific value the caller set previously).
+        // broker-specific value the caller set previously) AND any user-added
+        // fields outside the canonical {type, apiKey, secret, baseUrl} set
+        // (orgId, accountId, ...). Dropping those here would contradict both the
+        // CanonicalFields contract and the SetKey rotation path, which preserve them.
         var raw = LoadAllRaw();
         string? existingType = brokerType;
+        var extras = new List<KeyValuePair<string, string>>();
         if (raw.TryGetValue(providerId, out var existingJson) && !string.IsNullOrWhiteSpace(existingJson))
         {
             try
             {
                 using var doc = JsonDocument.Parse(existingJson);
-                if (doc.RootElement.ValueKind == JsonValueKind.Object
-                    && doc.RootElement.TryGetProperty("type", out var t)
-                    && t.ValueKind == JsonValueKind.String)
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 {
-                    existingType = t.GetString() ?? brokerType;
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.NameEquals("type") && prop.Value.ValueKind == JsonValueKind.String)
+                            existingType = prop.Value.GetString() ?? brokerType;
+                        else if (!CanonicalFields.Contains(prop.Name))
+                            extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
+                    }
                 }
             }
-            catch { /* swallow — fall back to brokerType. */ }
+            catch { /* swallow — fall back to brokerType, no extras. */ }
         }
 
         using var ms = new MemoryStream();
@@ -153,6 +166,13 @@ public sealed class BrokerCredentialStore : CredentialStore
             // baseUrl is optional in the broker schema — only write it when present.
             if (!string.IsNullOrWhiteSpace(creds.BaseUrl))
                 w.WriteString("baseUrl", creds.BaseUrl);
+            // User-added fields trail the canonical block, preserved verbatim.
+            foreach (var extra in extras)
+            {
+                w.WritePropertyName(extra.Key);
+                using var subDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(extra.Value) ? "null" : extra.Value);
+                subDoc.RootElement.WriteTo(w);
+            }
             w.WriteEndObject();
         }
 
