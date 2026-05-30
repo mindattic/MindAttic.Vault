@@ -17,5 +17,5 @@ After running, summarize the result and flag any failures.
 
 Notes:
 - Catalog entry: `MindAttic.Deploy/projects.json` -> `projects[]` slug `mindatticvault` (theme: Cyberspace).
-- Credentials: MindAttic.Vault at `%APPDATA%\MindAttic\Deploy\ftp.json` (transitional fallback: `MindAttic.Deploy/secrets/ftp.json`, gitignored).
+- Credentials: the single source of truth is `%APPDATA%\MindAttic\Deploy\ftp.json` (canonical Vault bucket; folder == `MindAttic:Vault:Deploy`), or `MINDATTIC_FTP_JSON` env in CI. Transitional fallback: `MindAttic.Deploy/secrets/ftp.json` (gitignored). **No User Secrets** — the family retired it; APPDATA is the one local home for credentials.
 - MindAttic.Vault is a library (no app deploy target) — this command only ships the landing page.

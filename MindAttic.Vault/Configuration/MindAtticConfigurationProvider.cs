@@ -53,7 +53,18 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
 
             if (File.Exists(file))
             {
-                LoadProvidersJson(file, bucket, data);
+                LoadBucketJson(file, bucket, data);
+            }
+
+            // The flat token bag (tokens.json) surfaces alongside providers.json so
+            // a Tokens-style bucket is fully visible through IConfiguration, not just
+            // via TokenStore. Loaded after providers.json so a token name overrides a
+            // providers.json leaf on the rare collision (matching the .key precedence
+            // below: later, more-specific sources win).
+            var tokensFile = Path.Combine(bucketDir, Credentials.TokenStore.TokensJsonFile);
+            if (File.Exists(tokensFile))
+            {
+                LoadBucketJson(tokensFile, bucket, data);
             }
 
             // Per-provider .key override files take highest priority — write them
@@ -84,11 +95,16 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     }
 
     /// <summary>
-    /// Parses a single bucket's providers.json into the supplied sink, projecting
-    /// each leaf to its colon-delimited path. Malformed JSON / IO errors are swallowed
-    /// (consistent with the file-based stores).
+    /// Parses a single bucket file (providers.json or tokens.json) and projects every
+    /// leaf under <c>MindAttic:Vault:&lt;bucket&gt;</c>, recursing through the entire
+    /// root object so nested objects, arrays, AND top-level scalars all surface. This
+    /// makes each bucket file a faithful image of its configuration subtree:
+    /// <c>{ id: { apiKey } }</c> → <c>…:&lt;bucket&gt;:id:apiKey</c> (provider keyrings),
+    /// and <c>{ "to": "+1…" }</c> → <c>…:&lt;bucket&gt;:to</c> (structured buckets like
+    /// Notifications whose root carries scalars, not just provider objects).
+    /// Malformed JSON / IO errors are swallowed (consistent with the file-based stores).
     /// </summary>
-    private static void LoadProvidersJson(string file, string bucket, IDictionary<string, string?> sink)
+    private static void LoadBucketJson(string file, string bucket, IDictionary<string, string?> sink)
     {
         try
         {
@@ -98,18 +114,9 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             using var doc = JsonDocument.Parse(raw);
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
 
-            foreach (var providerProp in doc.RootElement.EnumerateObject())
-            {
-                var providerId = providerProp.Name;
-                // Skip non-object provider entries — schema is { id: { ... } }.
-                if (providerProp.Value.ValueKind != JsonValueKind.Object) continue;
-
-                foreach (var fieldProp in providerProp.Value.EnumerateObject())
-                {
-                    var path = $"{VaultConfigurationKeys.VaultSection}:{bucket}:{providerId}:{fieldProp.Name}";
-                    FlattenInto(sink, path, fieldProp.Value);
-                }
-            }
+            var bucketPath = $"{VaultConfigurationKeys.VaultSection}:{bucket}";
+            foreach (var prop in doc.RootElement.EnumerateObject())
+                FlattenInto(sink, $"{bucketPath}:{prop.Name}", prop.Value);
         }
         catch { /* swallow malformed JSON — same as the file-based stores */ }
     }

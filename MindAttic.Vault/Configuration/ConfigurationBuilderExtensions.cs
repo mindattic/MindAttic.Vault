@@ -3,10 +3,10 @@ using Microsoft.Extensions.Configuration;
 namespace MindAttic.Vault.Configuration;
 
 /// <summary>
-/// Hook MindAttic's existing on-disk credential files into the
-/// <see cref="IConfiguration"/> pipeline so legacy keys at
-/// <c>%APPDATA%\MindAttic\&lt;bucket&gt;\providers.json</c> surface alongside
-/// User Secrets, env vars, and Azure Key Vault.
+/// Hook MindAttic's on-disk credential files into the <see cref="IConfiguration"/>
+/// pipeline so the canonical keys at
+/// <c>%APPDATA%\MindAttic\&lt;bucket&gt;\providers.json</c> (the single local source
+/// of truth) surface alongside env vars and Azure Key Vault.
 /// </summary>
 public static class ConfigurationBuilderExtensions
 {
@@ -16,8 +16,7 @@ public static class ConfigurationBuilderExtensions
     /// <code>
     /// builder.Configuration
     ///     .AddJsonFile("appsettings.json", optional: true)
-    ///     .AddMindAtticVaultFiles()           // %APPDATA%\MindAttic\... legacy keyrings
-    ///     .AddUserSecrets&lt;Program&gt;()       // dev secrets
+    ///     .AddMindAtticVaultFiles()           // %APPDATA%\MindAttic\... canonical keyrings (dev)
     ///     .AddEnvironmentVariables()          // App Service / containers
     ///     .AddAzureKeyVault(...);             // optional, Azure-only
     /// </code>

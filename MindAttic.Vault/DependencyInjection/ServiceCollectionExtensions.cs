@@ -12,8 +12,7 @@ namespace MindAttic.Vault.DependencyInjection;
 /// <code>
 /// builder.Configuration
 ///     .AddJsonFile("appsettings.json", optional: true)
-///     .AddMindAtticVaultFiles()           // %APPDATA%\MindAttic\... legacy keyrings (dev only)
-///     .AddUserSecrets&lt;Program&gt;()       // dev secrets (use shared id "mindattic-vault-shared")
+///     .AddMindAtticVaultFiles()           // %APPDATA%\MindAttic\... canonical keyrings (dev)
 ///     .AddEnvironmentVariables();         // App Service Application Settings + KV references
 ///
 /// builder.Services.AddMindAtticVault(builder.Configuration);
@@ -21,7 +20,7 @@ namespace MindAttic.Vault.DependencyInjection;
 ///
 /// <para>Stores resolve to a <see cref="CompositeCredentialStore"/> with the
 /// configuration-backed read view in front of the writable file-backed store.
-/// Reads see User Secrets / App Service / Key Vault; writes (e.g. from a
+/// Reads see App Service / Key Vault / the APPDATA file store; writes (e.g. from a
 /// settings UI) land in the file store. Apps in production should not write
 /// secrets at runtime; the writable fallback is for dev.</para>
 /// </summary>
@@ -52,9 +51,9 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Cloud-native wiring. Registers Composite(Configuration → File) for both
-    /// LLM and Broker buckets so the same code resolves credentials from User
-    /// Secrets, App Service Application Settings, Azure Key Vault, or the
-    /// legacy <c>%APPDATA%\MindAttic</c> file — whichever is present.
+    /// LLM and Broker buckets so the same code resolves credentials from App Service
+    /// Application Settings, Azure Key Vault, or the canonical
+    /// <c>%APPDATA%\MindAttic</c> file store — whichever is present.
     /// </summary>
     /// <param name="services">The service collection. Required.</param>
     /// <param name="configuration">The configuration root. Required.</param>

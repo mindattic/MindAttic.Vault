@@ -7,14 +7,14 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 
 **Why MindAttic.Vault**
 
-- **One schema, every source.** Define your secrets once under `MindAttic:Vault` — User Secrets, environment variables, App Service Application Settings, and Azure Key Vault all resolve into the same shape with no code changes between environments.
+- **One schema, every source.** Define your secrets once under `MindAttic:Vault` — the local APPDATA store, environment variables, App Service Application Settings, and Azure Key Vault all resolve into the same shape with no code changes between environments.
 - **Cloud-native by default, zero Azure SDK in the core.** Vault reads through `IConfiguration`, so you wire `AddAzureKeyVault(...)` (or AWS Secrets Manager, or GCP Secret Manager) upstream and Vault picks up the values automatically. No vendor lock-in.
 - **Backward-compatible with `%APPDATA%`.** Legacy `providers.json` keyrings keep working — they're surfaced as a first-class `IConfigurationSource`, so the cutover is zero-risk for existing dev installs.
 - **Read-only in production, writable on the laptop.** Configuration-backed stores throw on writes; production deploys never mutate secrets at runtime. Settings UIs land safely in the file-backed fallback.
 - **Settings stay roaming, secrets stay cloud-native.** Per-app preferences (theme, layout, last-opened-file) keep following the user across machines via `%APPDATA%`; secrets follow the .NET cloud-native convention and live in `IConfiguration`.
-- **Battle-tested.** 223 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
+- **Battle-tested.** 241 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
 
-| Status | **0.2.0** — published to nuget.org and `C:\LocalNuGet`. 223 NUnit tests green. **Integrated into 7 of 8 consumers** (Legion, FractionsOfACent, ThinkTank, Tutor, IdiotProof, StreetSamurai, TaxRateCollector); per-project plans live in [`IntegrationPlans/`](IntegrationPlans/). |
+| Status | **0.3.0** — User Secrets retired; APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 241 NUnit tests green. All 9 consumers bumped to `0.3.0` and stripped of `AddUserSecrets`/`<UserSecretsId>`. |
 | --- | --- |
 | Target framework | `net10.0` |
 | Dependencies | `Microsoft.Extensions.Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
@@ -53,7 +53,7 @@ Adding a new MindAttic app today means copy-pasting 60–200 lines of credential
 
 ## Design principles
 
-1. **Cloud-native first.** The primary credential source is `IConfiguration`. The same `services.AddMindAtticVault(builder.Configuration)` call resolves keys from User Secrets in dev, Azure App Service Application Settings in production, or Azure Key Vault directly — depending only on what the host has registered with `IConfigurationBuilder`.
+1. **Cloud-native first.** The primary credential source is `IConfiguration`. The same `services.AddMindAtticVault(builder.Configuration)` call resolves keys from the local APPDATA store in dev, Azure App Service Application Settings in production, or Azure Key Vault directly — depending only on what the host has registered with `IConfigurationBuilder`.
 2. **Backward compatible.** Existing developers with keys in `%APPDATA%\MindAttic\LLM\providers.json` lose nothing. The file source is exposed as a first-class `IConfigurationSource` so legacy keys flow into `IConfiguration` automatically.
 3. **Settings stay roaming, secrets move into config.** Per-app preferences (theme, layout, last-opened-file) continue to live in `%APPDATA%\MindAttic\<app>\settings.json` because they should follow the user across machines. Secrets follow the .NET cloud-native convention and live in `IConfiguration`.
 4. **Read-only in production.** `ConfigurationCredentialStore` doesn't write back to `IConfiguration`. Mutations from a settings UI land in the file-backed fallback; production deploys never write secrets at runtime.
@@ -91,7 +91,7 @@ MindAttic.Vault
 
 ## Standard configuration schema
 
-Every cloud-native source — `appsettings.json`, User Secrets, env vars, App Service Application Settings, Azure Key Vault — surfaces the same shape under `MindAttic:Vault`:
+Every source — `appsettings.json`, the local APPDATA store, env vars, App Service Application Settings, Azure Key Vault — surfaces the same shape under `MindAttic:Vault`:
 
 ```jsonc
 {
@@ -120,25 +120,34 @@ How that schema appears in each source:
 | Source | What you set | Notes |
 | --- | --- | --- |
 | `appsettings.json` | The nested object above | Use `appsettings.Development.json` for non-secret dev overrides; never check secrets into git. |
-| **User Secrets** (dev) | `dotnet user-secrets set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-..."` | Use the **shared User Secrets ID** (next section) for family-wide sharing. |
+| **Local dev (APPDATA)** | `%APPDATA%\MindAttic\LLM\providers.json` (folder == section) | **The single local source of truth.** Surfaced through `IConfiguration` via `AddMindAtticVaultFiles()`. Edit the file directly or use the writable store API (`LlmCredentialStore.SetKey`). |
 | **Env vars** | `MindAttic__Vault__LLM__claude__apiKey=sk-ant-...` | Standard `__` → `:` translation. App Service Application Settings inject as env vars. |
 | **Azure Key Vault** | Secret named `MindAttic--Vault--LLM--claude--apiKey` | Standard `--` → `:` translation by the default `KeyVaultSecretManager`. |
 | **App Service Key Vault references** | App Setting value `@Microsoft.KeyVault(SecretUri=...)` | App Service resolves the reference into a plain env var before the app sees it — Vault picks it up automatically. |
-| **Legacy `%APPDATA%`** | `%APPDATA%\MindAttic\LLM\providers.json` | Surfaced through `IConfiguration` via `AddMindAtticVaultFiles()`. Preserves every existing dev install. |
 
-### Shared User Secrets ID for family-wide dev sharing
+### Canonical bucket convention (single local source of truth)
 
-Set the following in **every** MindAttic project's `.csproj`:
+User Secrets is **retired**. It duplicated the writable APPDATA store and — because
+`AddUserSecrets` ranks *above* `AddMindAtticVaultFiles` — a stale `dotnet user-secrets`
+value could silently mask a freshly-rotated key on disk. The APPDATA store is now the
+one local home for every credential; do **not** add `AddUserSecrets(...)` or
+`<UserSecretsId>` to MindAttic projects. Production stays env vars / Key Vault.
 
-```xml
-<PropertyGroup>
-  <UserSecretsId>mindattic-vault-shared</UserSecretsId>
-</PropertyGroup>
-```
+The on-disk layout follows one invariant — **folder name == config section ==
+`MindAttic:Vault:<Bucket>`**, and each file is a faithful image of its config subtree:
 
-That ID is exposed as `VaultConfigurationKeys.SharedUserSecretsId`. With it set, one `dotnet user-secrets set` command writes to a single shared `secrets.json` and every app sees the new key — same family-wide-sharing benefit you got from `%APPDATA%\MindAttic\LLM\providers.json` today, but the canonical .NET way.
+| Bucket (`%APPDATA%\MindAttic\<Bucket>\`) | File | Shape |
+| --- | --- | --- |
+| `LLM` | `providers.json` | `{ id: { type, apiKey, model, maxTokens } }` |
+| `Brokers` | `providers.json` | `{ id: { type, apiKey, secret, baseUrl } }` |
+| `Tokens` | `tokens.json` | `{ github: "...", "nuget-org": "..." }` (flat) |
+| `Subtitles` | `providers.json` | `{ OpenSubtitles: { user, password } }` |
+| `Notifications` | `providers.json` | `{ twilio:{...}, email:{...}, to:"...", toEmail:"..." }` |
+| `AudioStore` | `providers.json` | `{ provider, container, connectionString }` |
 
-> Want isolation per-project? Drop the shared ID and let `dotnet user-secrets init` mint a per-project GUID. You lose family sharing but gain blast-radius isolation. Pick whichever fits the project; the integration plans default to shared.
+`MindAtticConfigurationSource` scans every bucket above by default and flattens each
+file (nested objects, arrays, and top-level scalars) into `IConfiguration`, so the same
+keys resolve whether they came from disk, env vars, or Key Vault.
 
 ## Source precedence (read order)
 
@@ -149,9 +158,8 @@ When a Program.cs follows the recommended wiring, here's the order Vault walks f
 2.  IConfiguration:                       (whichever is highest-priority among:)
       a. AddAzureKeyVault(...)            ← prod, when you wire it directly
       b. AddEnvironmentVariables()        ← App Service, containers, CI
-      c. AddUserSecrets<Program>()        ← dev laptop
-      d. AddJsonFile("appsettings.json")  ← non-secret defaults / public config
-      e. AddMindAtticVaultFiles()         ← legacy %APPDATA%\MindAttic
+      c. AddJsonFile("appsettings.json")  ← non-secret defaults / public config
+      d. AddMindAtticVaultFiles()         ← %APPDATA%\MindAttic (single local source of truth)
 3.  LlmCredentialStore (file fallback)    ← writable; settings UI lands here
 4.  return null
 ```
@@ -170,8 +178,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddMindAtticVaultFiles()                 // %APPDATA%\MindAttic\... legacy keys
-    .AddUserSecrets<Program>()                // dev secrets, family-wide via shared id
+    .AddMindAtticVaultFiles()                 // %APPDATA%\MindAttic\... single local source of truth
     .AddEnvironmentVariables();
 
 builder.Services.AddMindAtticVault(builder.Configuration);
@@ -190,12 +197,20 @@ public class MyService(LlmCredentialResolver llm, BrokerCredentialResolver broke
 }
 ```
 
-Set a secret once and every MindAttic project sees it:
+Set a secret once and every MindAttic project sees it — write the canonical APPDATA
+bucket file (folder == section). Edit it directly, or use the writable store API:
 
-```powershell
-dotnet user-secrets set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-..."
-dotnet user-secrets set "MindAttic:Vault:Brokers:alpaca-paper:apiKey" "PK..."
-dotnet user-secrets set "MindAttic:Vault:Brokers:alpaca-paper:secret" "S..."
+```csharp
+LlmCredentialStore.Default.SetKey("claude", "sk-ant-...");           // LLM\providers.json
+BrokerCredentialStore.Default.SetBrokerCreds("alpaca-paper",
+    new BrokerCredentialStore.BrokerCreds("PK...", "S...", null));   // Brokers\providers.json
+TokenStore.ForBucket("Tokens").Set("github", "ghp_...");             // Tokens\tokens.json
+```
+
+Equivalently, `%APPDATA%\MindAttic\LLM\providers.json`:
+
+```jsonc
+{ "claude": { "type": "anthropic", "apiKey": "sk-ant-..." } }
 ```
 
 ## Quickstart — Azure App Service
@@ -233,7 +248,6 @@ If you want to talk to Key Vault directly (e.g. you're not on App Service, or yo
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true)
     .AddMindAtticVaultFiles()
-    .AddUserSecrets<Program>()
     .AddEnvironmentVariables()
     .AddAzureKeyVault(
         new Uri("https://my-vault.vault.azure.net"),
@@ -255,10 +269,12 @@ Schema constants — use these instead of hard-coding strings.
 ```csharp
 VaultConfigurationKeys.RootSection;       // "MindAttic"
 VaultConfigurationKeys.VaultSection;      // "MindAttic:Vault"
-VaultConfigurationKeys.LlmSection;        // "MindAttic:Vault:LLM"
-VaultConfigurationKeys.BrokersSection;    // "MindAttic:Vault:Brokers"
-VaultConfigurationKeys.TokensSection;     // "MindAttic:Vault:Tokens"
-VaultConfigurationKeys.SharedUserSecretsId; // "mindattic-vault-shared"
+VaultConfigurationKeys.LlmSection;           // "MindAttic:Vault:LLM"
+VaultConfigurationKeys.BrokersSection;       // "MindAttic:Vault:Brokers"
+VaultConfigurationKeys.TokensSection;        // "MindAttic:Vault:Tokens"
+VaultConfigurationKeys.SubtitlesSection;     // "MindAttic:Vault:Subtitles"
+VaultConfigurationKeys.NotificationsSection; // "MindAttic:Vault:Notifications"
+VaultConfigurationKeys.AudioStoreSection;    // "MindAttic:Vault:AudioStore"
 ```
 
 ### `MindAtticConfigurationSource` (`MindAttic.Vault.Configuration`)
@@ -268,7 +284,7 @@ VaultConfigurationKeys.SharedUserSecretsId; // "mindattic-vault-shared"
 ```csharp
 builder.Configuration.AddMindAtticVaultFiles(opt =>
 {
-    opt.Buckets        = new[] { "LLM", "Brokers", "GitHub" };  // optional override
+    opt.Buckets        = new[] { "LLM", "Brokers", "Tokens" };  // optional narrow/override
     opt.RoamingRoot    = "/some/test/path";                     // optional override (tests)
     opt.ReloadOnChange = true;                                  // file watching
 });
@@ -310,9 +326,9 @@ Chains any number of stores. Reads walk in order; writes target the first writab
 Single-secret bucket for tokens that don't need provider/key/secret triplets:
 
 ```csharp
-var github = TokenStore.ForBucket("GitHub").Get("github");
-TokenStore.ForBucket("GitHub").Set("github", "ghp_...");
-TokenStore.ForBucket("GitHub").Remove("github");
+var github = TokenStore.ForBucket("Tokens").Get("github");
+TokenStore.ForBucket("Tokens").Set("github", "ghp_...");
+TokenStore.ForBucket("Tokens").Remove("github");
 ```
 
 ### `JsonSettingsStore<T>` (`MindAttic.Vault.Settings`)
@@ -376,14 +392,14 @@ var key = resolver.Resolve("claude");
 
 | What | Where | Roaming? | Why |
 | --- | --- | --- | --- |
-| **API keys / secrets** | `IConfiguration` (User Secrets / App Service / Key Vault) | n/a | Cloud-native standard; never written by app code in prod. |
+| **API keys / secrets** (local dev) | `%APPDATA%\MindAttic\<Bucket>\` (folder == `MindAttic:Vault:<Bucket>`) | yes | Single local source of truth; surfaced through `IConfiguration` via `AddMindAtticVaultFiles()`. |
+| **API keys / secrets** (prod) | `IConfiguration` (App Service Application Settings / Key Vault) | n/a | Cloud-native standard; never written by app code in prod. |
 | **Per-app preferences** (theme, layout, "last opened file") | `%APPDATA%\MindAttic\<app>\settings.json` | yes | Follows user across machines; not a secret. |
 | **Per-machine caches & data** (SQL data dir, evidence files, large blobs) | `%LOCALAPPDATA%\MindAttic\<app>\` | no | Big, machine-specific, not worth roaming. |
-| **Legacy LLM / broker keyrings** | `%APPDATA%\MindAttic\LLM\providers.json`, `%APPDATA%\MindAttic\Brokers\providers.json` | yes | Backward compat; still works, surfaced through `IConfiguration` via `AddMindAtticVaultFiles()`. |
 
 ## Testing strategy
 
-**Unit & integration:** 223 NUnit tests covering every public type, including
+**Unit & integration:** 241 NUnit tests covering every public type, including
 argument validation, malformed-input handling, atomic-write behaviour, and the
 full cloud-native end-to-end flow:
 
@@ -418,6 +434,8 @@ dotnet test D:\Projects\MindAttic\MindAttic.Vault\MindAttic.Vault.slnx
 
 ## Integration plans (per-project rollout)
 
+> **Historical.** These plans describe the original 0.2.0 rollout, which wired `AddUserSecrets` + `<UserSecretsId>` into each consumer. **0.3.0 retired User Secrets family-wide** — ignore the User-Secrets steps in the plans below; the current rule is the [canonical bucket convention](#canonical-bucket-convention-single-local-source-of-truth) (APPDATA only). The plans are kept as a record of the initial integration.
+
 Every applicable consumer has now been integrated. Each project's diff-level plan ran in this order so each consumer could be verified in isolation:
 
 | # | Project | Plan | Notes |
@@ -444,8 +462,8 @@ Every plan ends with a **rollback** section.
 
 ## FAQ
 
-**Q. Does the LLM/Broker file at `%APPDATA%` still work after the swap?**
-Yes. `AddMindAtticVaultFiles()` keeps it as a configuration source so legacy keys flow into `IConfiguration` automatically. New keys should go into User Secrets / App Service Application Settings, but no migration is forced.
+**Q. Where do local dev secrets live now that User Secrets is retired?**
+In the canonical APPDATA bucket files (`%APPDATA%\MindAttic\<Bucket>\providers.json|tokens.json`, where the folder equals the `MindAttic:Vault:<Bucket>` section). `AddMindAtticVaultFiles()` surfaces them through `IConfiguration` automatically — it's the single local source of truth. Production secrets come from App Service Application Settings / Key Vault.
 
 **Q. Can I write keys at runtime in production?**
 You shouldn't. `ConfigurationCredentialStore` throws `NotSupportedException` on writes. The composite resolvers route writes to the file fallback, which is appropriate for a dev laptop but should be locked down (or unmounted) in containers.
@@ -457,6 +475,6 @@ Anything that produces an `IConfiguration` works. AWS Secrets Manager and GCP Se
 Azure App Service Application Settings (with optional Key Vault references) cover ~95% of MindAttic's intended deployment targets and need zero Azure SDK. The remaining 5% (direct Key Vault SDK with Managed Identity) is one line of upstream wiring with the existing `Azure.Extensions.AspNetCore.Configuration.Secrets` package — not worth a separate Vault package. If a real production scenario emerges, we'll add a thin companion package then.
 
 **Q. How do I rotate a secret?**
-- Dev: `dotnet user-secrets set "MindAttic:Vault:LLM:claude:apiKey" "new-key"`.
+- Dev: edit the APPDATA bucket file (`%APPDATA%\MindAttic\LLM\providers.json`) or call `LlmCredentialStore.Default.SetKey("claude", "new-key")`. Because nothing ranks above it locally, the new value takes effect immediately — no stale store can mask it.
 - Prod (App Service): edit the Application Setting in the portal; restart the app slot.
 - Prod (Key Vault): create a new secret version. App Service Key Vault references re-resolve on app restart; direct `AddAzureKeyVault(...)` calls re-load on the cadence you configured.

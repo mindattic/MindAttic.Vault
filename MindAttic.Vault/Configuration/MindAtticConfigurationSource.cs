@@ -14,22 +14,27 @@ namespace MindAttic.Vault.Configuration;
 /// User Secrets (dev) or App Service Application Settings / Azure Key Vault
 /// (prod).</para>
 ///
-/// <para>Defaults to surfacing <c>"LLM"</c> and <c>"Brokers"</c> buckets;
-/// pass <see cref="Buckets"/> explicitly to add custom buckets.</para>
+/// <para>Defaults to surfacing every canonical credential bucket
+/// (<c>LLM</c>, <c>Brokers</c>, <c>Tokens</c>, <c>Subtitles</c>,
+/// <c>Notifications</c>, <c>AudioStore</c>); pass <see cref="Buckets"/>
+/// explicitly to narrow or add buckets.</para>
 /// </summary>
 public sealed class MindAtticConfigurationSource : IConfigurationSource
 {
     /// <summary>
-    /// Bucket folders under <c>%APPDATA%\MindAttic\</c> to read.
-    /// Defaults to <c>"LLM"</c> + <c>"Brokers"</c>.
+    /// Bucket folders under <c>%APPDATA%\MindAttic\</c> to read. Each bucket's folder
+    /// name doubles as the final segment of its <c>MindAttic:Vault:&lt;bucket&gt;</c>
+    /// configuration section — the canonical 1:1 convention.
     /// </summary>
     /// <remarks>
-    /// Settable both via object initializer
-    /// (<c>new MindAtticConfigurationSource { Buckets = new[] { "LLM", "Brokers", "GitHub" } }</c>)
+    /// Defaults to every canonical credential bucket so APPDATA is the single local
+    /// source of truth (User Secrets is retired). Settable both via object initializer
+    /// (<c>new MindAtticConfigurationSource { Buckets = new[] { "LLM", "Brokers" } }</c>)
     /// and via the configure callback supplied to
     /// <see cref="ConfigurationBuilderExtensions.AddMindAtticVaultFiles"/>.
     /// </remarks>
-    public IReadOnlyList<string> Buckets { get; set; } = new[] { "LLM", "Brokers" };
+    public IReadOnlyList<string> Buckets { get; set; } =
+        new[] { "LLM", "Brokers", "Tokens", "Subtitles", "Notifications", "AudioStore" };
 
     /// <summary>
     /// Override the roaming root (defaults to <c>%APPDATA%\MindAttic\</c>).

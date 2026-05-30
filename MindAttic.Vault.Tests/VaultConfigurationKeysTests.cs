@@ -19,19 +19,15 @@ public class VaultConfigurationKeysTests
         Assert.That(VaultConfigurationKeys.LlmSection,     Is.EqualTo("MindAttic:Vault:LLM"));
         Assert.That(VaultConfigurationKeys.BrokersSection, Is.EqualTo("MindAttic:Vault:Brokers"));
         Assert.That(VaultConfigurationKeys.TokensSection,  Is.EqualTo("MindAttic:Vault:Tokens"));
+        Assert.That(VaultConfigurationKeys.SubtitlesSection,     Is.EqualTo("MindAttic:Vault:Subtitles"));
+        Assert.That(VaultConfigurationKeys.NotificationsSection, Is.EqualTo("MindAttic:Vault:Notifications"));
+        Assert.That(VaultConfigurationKeys.AudioStoreSection,    Is.EqualTo("MindAttic:Vault:AudioStore"));
     }
 
     [Test]
     public void ApiKeyProperty_Is_Stable()
     {
         Assert.That(VaultConfigurationKeys.ApiKeyProperty, Is.EqualTo("apiKey"));
-    }
-
-    [Test]
-    public void SharedUserSecretsId_Is_Stable()
-    {
-        // Pinned in every consumer's .csproj — must not change without coordinating.
-        Assert.That(VaultConfigurationKeys.SharedUserSecretsId, Is.EqualTo("mindattic-vault-shared"));
     }
 
     [Test]

@@ -163,13 +163,6 @@ public class CloudNativeIntegrationTests
     }
 
     [Test]
-    public void Shared_UserSecretsId_Constant_Stays_Stable()
-    {
-        // Every project's .csproj should pin this exact value to share dev secrets family-wide.
-        Assert.That(VaultConfigurationKeys.SharedUserSecretsId, Is.EqualTo("mindattic-vault-shared"));
-    }
-
-    [Test]
     public void Json_Source_Mirrors_Standard_Schema()
     {
         // Smoke test: an appsettings.json snippet that follows the documented

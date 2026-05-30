@@ -6,13 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Vault</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <PackageId>MindAttic.Vault</PackageId>
     <Title>MindAttic.Vault</Title>
     <Authors>MindAttic</Authors>
     <Company>MindAttic</Company>
-    <Description>Universal credentials and settings vault for MindAttic apps. Cloud-native first: resolves credentials from IConfiguration (User Secrets, App Service Application Settings, Azure Key Vault) with a %APPDATA%/MindAttic file-based fallback for backward compatibility. Per-app settings stay roaming in %APPDATA%/MindAttic/&lt;app&gt;.</Description>
-    <PackageTags>mindattic;credentials;keyring;configuration;azure;keyvault;usersecrets;cloud-native</PackageTags>
+    <Description>Universal credentials and settings vault for MindAttic apps. Cloud-native first: resolves credentials from IConfiguration (App Service Application Settings, Azure Key Vault) with the %APPDATA%/MindAttic file store as the single local source of truth. Per-app settings stay roaming in %APPDATA%/MindAttic/&lt;app&gt;.</Description>
+    <PackageTags>mindattic;credentials;keyring;configuration;azure;keyvault;cloud-native</PackageTags>
     <PackageProjectUrl>https://github.com/mindattic/MindAttic.Vault</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mindattic/MindAttic.Vault.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

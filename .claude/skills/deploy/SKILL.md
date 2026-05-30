@@ -13,5 +13,5 @@ Report the result and flag any failures.
 
 Notes:
 - Catalog entry: `MindAttic.Deploy/projects.json` -> `projects[]` slug `mindatticvault` (theme: Cyberspace).
-- Credentials: `MindAttic.Deploy/secrets/ftp.json` (gitignored).
+- Credentials (single source of truth): `%APPDATA%\MindAttic\Deploy\ftp.json` (canonical Vault bucket) or `MINDATTIC_FTP_JSON` env in CI; transitional fallback `MindAttic.Deploy/secrets/ftp.json` (gitignored). No User Secrets — retired family-wide.
 - The legacy `scripts/cli/deploy.{bat,ps1}` + `build-html.js` + `deploy.settings.json[.template]` in this repo are dead code -- do not invoke them.

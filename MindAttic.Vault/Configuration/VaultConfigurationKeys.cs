@@ -16,13 +16,26 @@ namespace MindAttic.Vault.Configuration;
 ///       alpaca-paper: { type, apiKey, secret, baseUrl }
 ///       alpaca-live:  { type, apiKey, secret, baseUrl }
 ///     Tokens:
-///       github: "ghp_..."
+///       github:   "ghp_..."
+///       nuget-org:"oy2..."
+///     Subtitles:
+///       OpenSubtitles: { user, password }
+///     Notifications:
+///       twilio: { accountSid, authToken, from }
+///       email:  { smtpHost, smtpPort, username, password, from }
+///       to:     "+1..."
+///     AudioStore: { provider, container, connectionString }
 /// </code>
+///
+/// <para><b>Canonical on-disk home (single local source of truth):</b> each section's
+/// final segment is also its folder under <c>%APPDATA%\MindAttic\</c> — e.g.
+/// <c>MindAttic:Vault:LLM</c> ↔ <c>%APPDATA%\MindAttic\LLM\providers.json</c>. Surfaced
+/// through <see cref="MindAtticConfigurationSource"/>.</para>
 ///
 /// <para><b>Examples by source:</b></para>
 /// <list type="bullet">
 ///   <item><description>appsettings.json — nested objects under <c>"MindAttic":{ "Vault":{ ... } }</c>.</description></item>
-///   <item><description>User Secrets — <c>dotnet user-secrets set "MindAttic:Vault:LLM:claude:apiKey" "sk-ant-..."</c>.</description></item>
+///   <item><description>Local dev — the APPDATA bucket file above (e.g. <c>LLM\providers.json</c>).</description></item>
 ///   <item><description>Env vars (incl. App Service) — <c>MindAttic__Vault__LLM__claude__apiKey=sk-ant-...</c>.</description></item>
 ///   <item><description>Azure Key Vault — secret named <c>MindAttic--Vault--LLM--claude--apiKey</c> (default <c>--</c> → <c>:</c> translation).</description></item>
 /// </list>
@@ -44,12 +57,14 @@ public static class VaultConfigurationKeys
     /// <summary>Single-token bucket: <c>MindAttic:Vault:Tokens</c>.</summary>
     public const string TokensSection = VaultSection + ":" + "Tokens";
 
-    /// <summary>The shared User Secrets ID for every MindAttic app that wants family-wide dev secrets.</summary>
-    /// <remarks>
-    /// Pin this exact value in each project's <c>.csproj</c>:
-    /// <c>&lt;UserSecretsId&gt;mindattic-vault-shared&lt;/UserSecretsId&gt;</c>.
-    /// </remarks>
-    public const string SharedUserSecretsId = "mindattic-vault-shared";
+    /// <summary>Subtitle-provider credential bucket: <c>MindAttic:Vault:Subtitles</c>.</summary>
+    public const string SubtitlesSection = VaultSection + ":" + "Subtitles";
+
+    /// <summary>Notification (SMS/email) credential bucket: <c>MindAttic:Vault:Notifications</c>.</summary>
+    public const string NotificationsSection = VaultSection + ":" + "Notifications";
+
+    /// <summary>Audio blob-store credential bucket: <c>MindAttic:Vault:AudioStore</c>.</summary>
+    public const string AudioStoreSection = VaultSection + ":" + "AudioStore";
 
     /// <summary>The standard property name for an API key inside a per-provider object.</summary>
     public const string ApiKeyProperty = "apiKey";

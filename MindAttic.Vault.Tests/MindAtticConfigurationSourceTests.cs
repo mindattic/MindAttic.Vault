@@ -278,6 +278,83 @@ public class MindAtticConfigurationSourceTests
     }
 
     [Test]
+    public void Structured_Bucket_Flattens_Root_Scalars_And_Nested_Objects()
+    {
+        // Notifications carries both nested provider objects (twilio/email) AND
+        // top-level scalars (to/toEmail). All must surface — the latter is the
+        // bug the generalized flattening fixes.
+        using var tmp = new TempDirectory();
+        var dir = Path.Combine(tmp.Path, "Notifications");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "providers.json"), """
+        {
+          "twilio": { "accountSid": "AC1", "authToken": "tok", "from": "+15555550100" },
+          "email":  { "smtpHost": "smtp.example.com", "smtpPort": 587 },
+          "to":      "+15555550101",
+          "toEmail": "5555550101@vtext.com"
+        }
+        """);
+
+        var config = new ConfigurationBuilder()
+            .Add(new MindAtticConfigurationSource { RoamingRoot = tmp.Path })
+            .Build();
+
+        Assert.That(config["MindAttic:Vault:Notifications:twilio:accountSid"], Is.EqualTo("AC1"));
+        Assert.That(config["MindAttic:Vault:Notifications:email:smtpPort"],    Is.EqualTo("587"));
+        Assert.That(config["MindAttic:Vault:Notifications:to"],                Is.EqualTo("+15555550101"));
+        Assert.That(config["MindAttic:Vault:Notifications:toEmail"],           Is.EqualTo("5555550101@vtext.com"));
+    }
+
+    [Test]
+    public void Tokens_Json_Is_Surfaced_As_Flat_Leaves()
+    {
+        using var tmp = new TempDirectory();
+        var dir = Path.Combine(tmp.Path, "Tokens");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "tokens.json"),
+            """ { "github": "ghp_xxx", "nuget-org": "oy2_yyy" } """);
+
+        var config = new ConfigurationBuilder()
+            .Add(new MindAtticConfigurationSource { RoamingRoot = tmp.Path })
+            .Build();
+
+        Assert.That(config["MindAttic:Vault:Tokens:github"],    Is.EqualTo("ghp_xxx"));
+        Assert.That(config["MindAttic:Vault:Tokens:nuget-org"], Is.EqualTo("oy2_yyy"));
+    }
+
+    [Test]
+    public void Default_Buckets_Cover_Every_Canonical_Credential_Domain()
+    {
+        // The single-source-of-truth promise: with no explicit Buckets, every
+        // canonical credential domain is scanned from APPDATA.
+        using var tmp = new TempDirectory();
+        foreach (var (bucket, file, json) in new[]
+        {
+            ("LLM",           "providers.json", """ { "claude": { "apiKey": "L" } } """),
+            ("Brokers",       "providers.json", """ { "alpaca-paper": { "apiKey": "B" } } """),
+            ("Tokens",        "tokens.json",    """ { "github": "T" } """),
+            ("Subtitles",     "providers.json", """ { "OpenSubtitles": { "user": "u", "password": "p" } } """),
+            ("Notifications", "providers.json", """ { "to": "N" } """),
+            ("AudioStore",    "providers.json", """ { "provider": "azure", "connectionString": "A" } """),
+        })
+        {
+            Directory.CreateDirectory(Path.Combine(tmp.Path, bucket));
+            File.WriteAllText(Path.Combine(tmp.Path, bucket, file), json);
+        }
+
+        var config = new ConfigurationBuilder()
+            .Add(new MindAtticConfigurationSource { RoamingRoot = tmp.Path }) // default buckets
+            .Build();
+
+        Assert.That(config["MindAttic:Vault:LLM:claude:apiKey"],               Is.EqualTo("L"));
+        Assert.That(config["MindAttic:Vault:Brokers:alpaca-paper:apiKey"],     Is.EqualTo("B"));
+        Assert.That(config["MindAttic:Vault:Tokens:github"],                   Is.EqualTo("T"));
+        Assert.That(config["MindAttic:Vault:Subtitles:OpenSubtitles:user"],    Is.EqualTo("u"));
+        Assert.That(config["MindAttic:Vault:Notifications:to"],                Is.EqualTo("N"));
+        Assert.That(config["MindAttic:Vault:AudioStore:connectionString"],     Is.EqualTo("A"));
+    }
+
+    [Test]
     public void ReloadOnChange_Picks_Up_New_Provider_Json()
     {
         using var tmp = new TempDirectory();
