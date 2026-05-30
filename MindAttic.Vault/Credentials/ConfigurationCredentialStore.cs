@@ -212,6 +212,12 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
         // can't misinterpret "1,000" as a long or eat the decimal point on doubles.
         if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var l))
                                                                     { writer.WriteNumberValue(l); return; }
+        // An integer string too large for Int64 must NOT fall through to GetDouble —
+        // that reformats it into lossy scientific notation ("99999999999999999999"
+        // → "1E+20"), corrupting the value. decimal preserves up to ~28 digits exactly;
+        // anything beyond that stays a verbatim string rather than being mangled.
+        if (decimal.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec))
+                                                                    { writer.WriteNumberValue(dec); return; }
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
                                                                     { writer.WriteNumberValue(d); return; }
         writer.WriteStringValue(value);

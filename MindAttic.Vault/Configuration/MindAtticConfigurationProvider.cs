@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
@@ -108,27 +107,54 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
                 foreach (var fieldProp in providerProp.Value.EnumerateObject())
                 {
                     var path = $"{VaultConfigurationKeys.VaultSection}:{bucket}:{providerId}:{fieldProp.Name}";
-                    sink[path] = JsonValueToString(fieldProp.Value);
+                    FlattenInto(sink, path, fieldProp.Value);
                 }
             }
         }
         catch { /* swallow malformed JSON — same as the file-based stores */ }
     }
 
-    /// <summary>Coerces a JSON value to the string-shaped form IConfiguration expects.</summary>
+    /// <summary>
+    /// Projects a provider field into the configuration sink, recursing into nested
+    /// objects (<c>:child</c>) and arrays (<c>:index</c>) so every leaf is individually
+    /// navigable — matching the stock <c>JsonConfigurationProvider</c> convention.
+    /// Without this, a <c>"scopes": ["a","b"]</c> field would land as a single raw-JSON
+    /// blob at <c>...:scopes</c> and <c>IConfiguration.Get&lt;string[]&gt;()</c> / nested
+    /// binding would silently return nothing.
+    /// </summary>
+    private static void FlattenInto(IDictionary<string, string?> sink, string path, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var prop in element.EnumerateObject())
+                    FlattenInto(sink, $"{path}:{prop.Name}", prop.Value);
+                break;
+            case JsonValueKind.Array:
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                    FlattenInto(sink, $"{path}:{index++}", item);
+                break;
+            default:
+                sink[path] = JsonValueToString(element);
+                break;
+        }
+    }
+
+    /// <summary>Coerces a JSON scalar to the string-shaped form IConfiguration expects.</summary>
     private static string? JsonValueToString(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.String => element.GetString(),
-        // Pin to InvariantCulture so a number written on a de-DE host doesn't surface
-        // as "3,14" and then fail to round-trip through downstream parsers.
-        JsonValueKind.Number => element.TryGetInt64(out var l)
-            ? l.ToString(CultureInfo.InvariantCulture)
-            : element.GetDouble().ToString(CultureInfo.InvariantCulture),
+        // Surface the verbatim JSON number token rather than round-tripping through
+        // Int64/Double: a value larger than Int64 (e.g. 99999999999999999999) would
+        // otherwise be reformatted by GetDouble() into lossy scientific notation
+        // ("1E+20"), corrupting the on-disk value and diverging from the stock
+        // JsonConfigurationProvider (which stores the raw token). GetRawText is the
+        // exact source text — lossless and culture-independent.
+        JsonValueKind.Number => element.GetRawText(),
         JsonValueKind.True   => "true",
         JsonValueKind.False  => "false",
         JsonValueKind.Null   => null,
-        // Objects/arrays inside provider entries are rare; surface the raw text
-        // and let the consumer parse it.
         _                    => element.GetRawText()
     };
 
@@ -141,51 +167,69 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// </summary>
     private void EnsureWatchers()
     {
+        // Watch the root itself (not just each bucket dir) so a bucket directory
+        // CREATED after the first Load — i.e. one that didn't exist when we wired the
+        // per-bucket watchers — is still observed. The root watcher's DirectoryName
+        // notification fires when the bucket dir appears, triggering the reload that
+        // attaches that bucket's own watcher. Without this, a configured bucket whose
+        // directory is absent at startup would never be picked up under ReloadOnChange.
+        TryWatch(source.EffectiveRoot);
+
         var buckets = source.Buckets ?? Array.Empty<string>();
         foreach (var bucket in buckets)
         {
             if (string.IsNullOrWhiteSpace(bucket)) continue;
-            var bucketDir = Path.Combine(source.EffectiveRoot, bucket);
-            if (!Directory.Exists(bucketDir)) continue;
+            TryWatch(Path.Combine(source.EffectiveRoot, bucket));
+        }
+    }
 
-            // Mutate the watcher collections under timerLock: Load (hence
-            // EnsureWatchers) can run on a ThreadPool thread via Reload, and that
-            // must not race Dispose's iterate-and-clear of the same lists.
-            lock (timerLock)
+    /// <summary>
+    /// Attaches a debounced-reload <see cref="FileSystemWatcher"/> to <paramref name="dir"/>
+    /// if it exists and isn't already watched. Best-effort: an unwatchable dir is dropped
+    /// from the tracked set so a later <see cref="Load"/> can retry.
+    /// </summary>
+    private void TryWatch(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return;
+
+        // Mutate the watcher collections under timerLock: Load (hence EnsureWatchers)
+        // can run on a ThreadPool thread via Reload, and that must not race Dispose's
+        // iterate-and-clear of the same lists.
+        lock (timerLock)
+        {
+            // Don't wire new watchers onto a provider that's already torn down.
+            if (disposed) return;
+            // Skip dirs we already have a live watcher for — but newly-created dirs
+            // (that didn't exist on the first Load) will fall through.
+            if (!watchedDirs.Add(dir)) return;
+
+            FileSystemWatcher? watcher = null;
+            try
             {
-                // Don't wire new watchers onto a provider that's already torn down.
-                if (disposed) return;
-                // Skip buckets we already have a live watcher for — but newly-created
-                // bucket dirs (that didn't exist on the first Load) will fall through.
-                if (!watchedDirs.Add(bucketDir)) continue;
-
-                FileSystemWatcher? watcher = null;
-                try
+                watcher = new FileSystemWatcher(dir)
                 {
-                    watcher = new FileSystemWatcher(bucketDir)
-                    {
-                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
-                    };
-                    // Any change schedules a debounced reload — a single editor save
-                    // typically fires Changed + Created + Renamed in quick succession,
-                    // and we don't want to re-scan and fan-out OnReload() three times.
-                    // Subscribe BEFORE enabling events so a change landing during
-                    // setup can't slip through unobserved.
-                    watcher.Changed += (_, _) => ScheduleReload();
-                    watcher.Created += (_, _) => ScheduleReload();
-                    watcher.Deleted += (_, _) => ScheduleReload();
-                    watcher.Renamed += (_, _) => ScheduleReload();
-                    watcher.EnableRaisingEvents = true;
-                    watchers.Add(watcher);
-                }
-                catch
-                {
-                    // Watching failed — dispose the partial watcher and drop the dir
-                    // from the tracked set so a later Load can retry (e.g., after a
-                    // permissions change).
-                    try { watcher?.Dispose(); } catch { /* best-effort */ }
-                    watchedDirs.Remove(bucketDir);
-                }
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName
+                                 | NotifyFilters.DirectoryName | NotifyFilters.CreationTime
+                };
+                // Any change schedules a debounced reload — a single editor save
+                // typically fires Changed + Created + Renamed in quick succession,
+                // and we don't want to re-scan and fan-out OnReload() three times.
+                // Subscribe BEFORE enabling events so a change landing during
+                // setup can't slip through unobserved.
+                watcher.Changed += (_, _) => ScheduleReload();
+                watcher.Created += (_, _) => ScheduleReload();
+                watcher.Deleted += (_, _) => ScheduleReload();
+                watcher.Renamed += (_, _) => ScheduleReload();
+                watcher.EnableRaisingEvents = true;
+                watchers.Add(watcher);
+            }
+            catch
+            {
+                // Watching failed — dispose the partial watcher and drop the dir
+                // from the tracked set so a later Load can retry (e.g., after a
+                // permissions change).
+                try { watcher?.Dispose(); } catch { /* best-effort */ }
+                watchedDirs.Remove(dir);
             }
         }
     }

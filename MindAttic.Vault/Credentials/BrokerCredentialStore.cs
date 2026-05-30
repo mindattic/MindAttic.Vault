@@ -136,6 +136,10 @@ public sealed class BrokerCredentialStore : CredentialStore
         // CanonicalFields contract and the SetKey rotation path, which preserve them.
         var raw = LoadAllRaw();
         string? existingType = brokerType;
+        // A non-string on-disk `type` (e.g. a hand-edited number) can't be held in
+        // `existingType` — capture its verbatim JSON so it's preserved rather than
+        // silently reset to `brokerType`, matching the verbatim-preserve contract.
+        string? existingTypeRaw = null;
         var extras = new List<KeyValuePair<string, string>>();
         if (raw.TryGetValue(providerId, out var existingJson) && !string.IsNullOrWhiteSpace(existingJson))
         {
@@ -146,8 +150,13 @@ public sealed class BrokerCredentialStore : CredentialStore
                 {
                     foreach (var prop in doc.RootElement.EnumerateObject())
                     {
-                        if (prop.NameEquals("type") && prop.Value.ValueKind == JsonValueKind.String)
-                            existingType = prop.Value.GetString() ?? brokerType;
+                        if (prop.NameEquals("type"))
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.String)
+                                existingType = prop.Value.GetString() ?? brokerType;
+                            else
+                                existingTypeRaw = prop.Value.GetRawText();
+                        }
                         else if (!CanonicalFields.Contains(prop.Name))
                             extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
                     }
@@ -160,7 +169,17 @@ public sealed class BrokerCredentialStore : CredentialStore
         using (var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
         {
             w.WriteStartObject();
-            w.WriteString("type", existingType);
+            if (existingTypeRaw is not null)
+            {
+                // Re-emit the original non-string type verbatim.
+                w.WritePropertyName("type");
+                using var typeDoc = JsonDocument.Parse(existingTypeRaw);
+                typeDoc.RootElement.WriteTo(w);
+            }
+            else
+            {
+                w.WriteString("type", existingType);
+            }
             w.WriteString("apiKey", creds.ApiKey ?? "");
             w.WriteString("secret", creds.Secret ?? "");
             // baseUrl is optional in the broker schema — only write it when present.
@@ -209,10 +228,23 @@ public sealed class BrokerCredentialStore : CredentialStore
                 {
                     foreach (var prop in doc.RootElement.EnumerateObject())
                     {
+                        // The old apiKey (any casing) is always replaced by the new
+                        // value below. Every OTHER sibling must survive the rotation:
+                        // canonical string fields are clustered up top, and anything we
+                        // don't canonicalize is preserved verbatim as an extra.
+                        if (prop.Name.Equals("apiKey", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
                         if (prop.NameEquals("type")    && prop.Value.ValueKind == JsonValueKind.String) type    = prop.Value.GetString();
                         else if (prop.NameEquals("secret")  && prop.Value.ValueKind == JsonValueKind.String) secret  = prop.Value.GetString();
                         else if (prop.NameEquals("baseUrl") && prop.Value.ValueKind == JsonValueKind.String) baseUrl = prop.Value.GetString();
-                        else if (!CanonicalFields.Contains(prop.Name))
+                        else
+                            // Preserve verbatim rather than dropping: user-added fields,
+                            // a case-variant canonical spelling, OR a canonical field
+                            // whose on-disk value isn't the expected JSON string (a
+                            // hand-edited number/bool/null). Dropping a sibling on
+                            // rotation violates the store contract, and for `secret`
+                            // it would be unrecoverable credential loss.
                             extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
                     }
                 }

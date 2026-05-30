@@ -53,11 +53,6 @@ public sealed class LlmCredentialStore : CredentialStore
         return string.IsNullOrWhiteSpace(overrideDir) ? VaultPaths.RoamingBucket(Bucket) : overrideDir;
     }
 
-    // Canonical LLM fields the override knows how to canonicalize. Any property
-    // outside this set is treated as user-added and preserved verbatim.
-    private static readonly HashSet<string> CanonicalFields =
-        new(StringComparer.OrdinalIgnoreCase) { "type", "apiKey", "model", "maxTokens" };
-
     /// <summary>
     /// Preserves <c>type</c>, <c>model</c>, and <c>maxTokens</c> when present.
     /// When <c>type</c> is missing, infers from provider id
@@ -86,23 +81,26 @@ public sealed class LlmCredentialStore : CredentialStore
                 {
                     foreach (var prop in doc.RootElement.EnumerateObject())
                     {
+                        // The old apiKey (any casing) is always replaced by the new
+                        // value below — drop it. Every OTHER sibling must survive the
+                        // rotation; anything we don't canonicalize is preserved verbatim
+                        // as an extra (see the else arm).
+                        if (prop.Name.Equals("apiKey", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
                         if (prop.NameEquals("type") && prop.Value.ValueKind == JsonValueKind.String)
                             type = prop.Value.GetString();
                         else if (prop.NameEquals("model") && prop.Value.ValueKind == JsonValueKind.String)
                             model = prop.Value.GetString();
-                        else if (prop.NameEquals("maxTokens"))
-                        {
-                            // Canonicalize a proper Int32; otherwise (a string-typed
-                            // hand-edit, or a value > int.MaxValue) preserve the field
-                            // verbatim as an extra rather than silently dropping it —
-                            // falling through to the CanonicalFields guard below would
-                            // discard it, since "maxTokens" is itself a canonical name.
-                            if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var mtVal))
-                                maxTokens = mtVal;
-                            else
-                                extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
-                        }
-                        else if (!CanonicalFields.Contains(prop.Name))
+                        else if (prop.NameEquals("maxTokens") && prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var mtVal))
+                            maxTokens = mtVal;
+                        else
+                            // Preserve verbatim rather than dropping: user-added fields,
+                            // a case-variant canonical spelling ("Model"), a non-string
+                            // type/model, or a maxTokens that isn't an Int32 number
+                            // (string hand-edit or > int.MaxValue). Losing any sibling on
+                            // rotation violates the store contract; the prior maxTokens
+                            // fix established this, and it must apply to every field.
                             extras.Add(new KeyValuePair<string, string>(prop.Name, prop.Value.GetRawText()));
                     }
                 }

@@ -145,14 +145,23 @@ public sealed class TokenStore
 
     private static Dictionary<string, string> ParseTokensSafe(string raw)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(raw)) return result;
         try
         {
-            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(raw)
-                         ?? new Dictionary<string, string>();
-            // Normalise to case-insensitive comparer so callers can use any casing.
-            return new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(raw);
+            if (parsed is null) return result;
+            // Normalise to a case-insensitive map by copying entry-by-entry (last
+            // write wins) rather than via the copy-constructor. A tokens.json written
+            // by another tool/version with two keys that differ only in case
+            // ("github" + "GitHub") deserialises into a default (ordinal) dictionary
+            // with BOTH entries; the OrdinalIgnoreCase copy-constructor would then throw
+            // ArgumentException (duplicate key), which the catch below swallows —
+            // silently wiping EVERY token. Indexer assignment collapses the collision
+            // instead of throwing.
+            foreach (var kv in parsed)
+                result[kv.Key] = kv.Value;
+            return result;
         }
         catch
         {

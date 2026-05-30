@@ -161,6 +161,17 @@ public class CompositeCredentialStore : ICredentialStore, IDisposable
 
             foreach (var prop in hi)
             {
+                // JsonObject is case-SENSITIVE: assigning lo["apiKey"] when the lower
+                // layer carried "ApiKey" would ADD a second property rather than
+                // override, leaving the stale lower-priority value (an OLD credential!)
+                // beside the new one. Strip any case-variant of this key from lo first
+                // so the higher-priority field genuinely overrides it.
+                foreach (var stale in lo.Select(p => p.Key)
+                             .Where(k => string.Equals(k, prop.Key, StringComparison.OrdinalIgnoreCase)
+                                      && !string.Equals(k, prop.Key, StringComparison.Ordinal))
+                             .ToList())
+                    lo.Remove(stale);
+
                 // Detach the node from its current parent before re-parenting to lo.
                 var clone = prop.Value?.DeepClone();
                 lo[prop.Key] = clone;

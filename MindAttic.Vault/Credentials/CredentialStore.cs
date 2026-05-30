@@ -387,18 +387,26 @@ public class CredentialStore : ICredentialStore
     /// </summary>
     private static Dictionary<string, string> ParseFlatJsonSafe(string path)
     {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var json = File.ReadAllText(path);
             var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (parsed is null) return result;
             // Re-wrap with a case-insensitive comparer so legacy credentials.json
             // lookups honour the case-insensitive provider-id contract documented
             // on ICredentialStore.GetKey (the .key and providers.json layers already
             // resolve case-insensitively; this layer must match). A plain
             // Deserialize yields an Ordinal/case-sensitive map.
-            return parsed is null
-                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+            //
+            // Copy entry-by-entry (last write wins) instead of using the
+            // OrdinalIgnoreCase copy-constructor: a hand-edited credentials.json with
+            // two case-variant keys ("openai" + "OpenAI") deserialises into an ordinal
+            // map holding BOTH, and the copy-constructor would throw on the duplicate —
+            // which the catch below swallows, silently dropping EVERY legacy credential.
+            foreach (var kv in parsed)
+                result[kv.Key] = kv.Value;
+            return result;
         }
         catch
         {
