@@ -1,0 +1,113 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject HealthMonitorStore Store
+@inject LlmHealthMonitor Monitor
+
+<PageTitle>LLM Health</PageTitle>
+
+<h1 class="visually-hidden">LLM Health Dashboard</h1>
+
+@{
+    var snapshots = Store.Snapshots;
+    var trusted = snapshots.Where(s => s.IsTrusted).ToList();
+    var others = snapshots.Where(s => !s.IsTrusted).ToList();
+    var verdictOk = Store.TrustedPanelHealthy;
+}
+
+<section class="verdict @(verdictOk ? "ok" : "bad")">
+    <div class="verdict-main">
+        <span class="verdict-dot"></span>
+        <span class="verdict-text">
+            @if (snapshots.Count == 0)
+            {
+                <text>Awaiting first sweep…</text>
+            }
+            else if (verdictOk)
+            {
+                <text>Trusted panel is ONLINE &amp; queryable</text>
+            }
+            else
+            {
+                <text>Trusted panel DEGRADED — action needed</text>
+            }
+        </span>
+    </div>
+    <div class="verdict-meta">
+        <span>Last checked: @LastChecked()</span>
+        <button class="recheck" disabled="@Store.SweepInProgress" @onclick="RecheckAsync">
+            @(Store.SweepInProgress ? "Checking…" : "Re-check now")
+        </button>
+    </div>
+</section>
+
+@if (trusted.Count > 0)
+{
+    <h2 class="group-title">Trusted voting panel</h2>
+    <div class="grid">
+        @foreach (var s in trusted)
+        {
+            @ProviderCard(s)
+        }
+    </div>
+}
+
+@if (others.Count > 0)
+{
+    <h2 class="group-title">Other providers <span class="muted">(informational)</span></h2>
+    <div class="grid">
+        @foreach (var s in others)
+        {
+            @ProviderCard(s)
+        }
+    </div>
+}
+
+@code {
+    private RenderFragment ProviderCard(ProviderSnapshot s) => __builder =>
+    {
+        <div class="card @CssFor(s.Status)">
+            <div class="card-head">
+                <span class="card-name">@s.DisplayName</span>
+                <span class="badge @CssFor(s.Status)">@s.Status.ToString().ToUpperInvariant()</span>
+            </div>
+            <div class="card-body">
+                <div class="line"><span class="k">Diagnosis</span><span class="v">@s.Diagnosis@(s.HttpStatusCode is int c ? $" · HTTP {c}" : "")</span></div>
+                <div class="line"><span class="k">Latency</span><span class="v">@s.LatencyMs ms</span></div>
+                <div class="line"><span class="k">Uptime</span><span class="v">@s.UptimePercent.ToString("F0")%</span></div>
+                @if (s.ConsecutiveFailures > 0)
+                {
+                    <div class="line"><span class="k">Failures</span><span class="v">@s.ConsecutiveFailures in a row</span></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(s.SelfHealNote))
+                {
+                    <div class="heal">🔧 @s.SelfHealNote</div>
+                }
+                <div class="detail">@s.Detail</div>
+                @if (s.Status == ProviderStatus.Down && !string.IsNullOrWhiteSpace(s.KeysUrl))
+                {
+                    <a class="action" href="@s.KeysUrl" target="_blank" rel="noopener">Manage keys ↗</a>
+                }
+            </div>
+        </div>
+    };
+
+    private static string CssFor(ProviderStatus status) => status switch
+    {
+        ProviderStatus.Healthy  => "ok",
+        ProviderStatus.Degraded => "warn",
+        ProviderStatus.Down     => "bad",
+        _                        => "unknown",
+    };
+
+    private string LastChecked() =>
+        Store.LastSweepUtc is { } t ? $"{(DateTimeOffset.UtcNow - t).TotalSeconds:F0}s ago (UTC {t:HH:mm})" : "never";
+
+    protected override void OnInitialized() => Store.OnChanged += OnStoreChanged;
+
+    private void OnStoreChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task RecheckAsync() => await Monitor.RunSweepAsync();
+
+    public void Dispose() => Store.OnChanged -= OnStoreChanged;
+}

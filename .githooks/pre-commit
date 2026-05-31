@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-commit gate: the trusted LLM panel's keys — as resolved through the Vault
+# credential chain (providers.json / env / Azure Key Vault) — must authenticate
+# LIVE before a commit is allowed. No point committing when a trusted key is dead.
+#
+# Runs ONLY the trusted four (claude / openai / gemini / deepseek) via the
+# LiveKeysTrusted-tagged test — cheap token-free GET /models probes.
+#
+# Offline / no-network bypass (use sparingly):
+#   SKIP_LLM_KEY_CHECK=1 git commit -m "..."
+# ─────────────────────────────────────────────────────────────────────────────
+set -e
+
+if [ "${SKIP_LLM_KEY_CHECK:-0}" = "1" ]; then
+  echo "pre-commit: SKIP_LLM_KEY_CHECK=1 — skipping live LLM key validation."
+  exit 0
+fi
+
+echo "pre-commit: validating trusted LLM panel keys via the Vault chain (live)…"
+if dotnet test MindAttic.Vault.Tests -c Release \
+      --filter "Category=LiveKeysTrusted" \
+      --nologo --verbosity quiet; then
+  echo "pre-commit: all trusted LLM keys valid — proceeding."
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+
+pre-commit: BLOCKED — a trusted LLM key failed live validation.
+  Fix/rotate the failing key, then re-commit:
+    • local:  %APPDATA%\MindAttic\LLM\providers.json
+    • cloud:  Azure Key Vault secret  MindAttic--Vault--LLM--<provider>--apiKey
+  Offline bypass (last resort):  SKIP_LLM_KEY_CHECK=1 git commit ...
+MSG
+exit 1
