@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Vault</AssemblyName>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <PackageId>MindAttic.Vault</PackageId>
     <Title>MindAttic.Vault</Title>
     <Authors>MindAttic</Authors>
