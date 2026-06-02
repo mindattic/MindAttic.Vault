@@ -15,7 +15,7 @@
 
   <ItemGroup>
     <!-- Probe + diagnosis + live model discovery — reused, not reinvented. -->
-    <PackageReference Include="MindAttic.Legion" Version="2.3.0" />
+    <PackageReference Include="MindAttic.Legion" Version="2.4.0" />
 
     <!-- Azure Key Vault as a configuration source (managed identity in App Service). -->
     <PackageReference Include="Azure.Identity" Version="1.13.1" />
