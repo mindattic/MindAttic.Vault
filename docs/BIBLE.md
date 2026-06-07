@@ -160,8 +160,9 @@ Evidence captured 2026-06-07 on branch `feat/llm-health-dashboard`.
 
 - **Build:** `dotnet build MindAttic.Vault.slnx -c Debug` → **exit 0, clean** (library builds for
   both `net9.0` and `net10.0`). ✅
-- **Tests:** `dotnet test MindAttic.Vault.slnx` → **241 passed, 0 failed, 1 skipped**
-  (`TrustedPanel_EveryKeyAuthenticatesLive` — a live-network test, intentionally skipped). ✅
+- **Tests:** `dotnet test MindAttic.Vault.slnx` → **Failed: 0, Passed: 241, Total: 241** (exit 0).
+  `TrustedPanel_EveryKeyAuthenticatesLive` is a live-network test skipped at runtime via
+  `OneTimeSetUp`; the NUnit runner counts it within the 241 total and the suite exits clean. ✅
 - **Coverage surface (proven):** every public type has NUnit coverage — `VaultPaths`,
   `EnvironmentOverlay`, `CredentialStore`, `LlmCredentialStore`, `BrokerCredentialStore`,
   `TokenStore`, `JsonSettingsStore<T>`, `KeyResolver`, `MindAtticConfigurationSource/Provider`,
@@ -169,8 +170,8 @@ Evidence captured 2026-06-07 on branch `feat/llm-health-dashboard`.
   `VaultConfigurationKeys`, `ServiceCollectionExtensions`, `Llm/BrokerCredentialResolver`, plus a
   `CloudNativeIntegrationTests` end-to-end fixture. ✅ (See [USER_STORIES](USER_STORIES.md).)
 - **Versioning:** `MindAttic.Vault.csproj` `<Version>1.0.0</Version>` — whole-number compliant
-  ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)). The README's "0.3.0" prose is **stale**
-  relative to the csproj; the csproj is authoritative. 🟡
+  ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)). README reconciled to `1.0.0` (VLT-US-X1
+  resolved). ✅
 - **Dashboard:** present in the working tree, references `MindAttic.Legion 3.0.0`, **not built by
   the solution and not covered by the test suite** — its status is unproven here. ⬜
   (See [VLT-§7](#VLT-§7).)
@@ -182,9 +183,8 @@ Evidence captured 2026-06-07 on branch `feat/llm-health-dashboard`.
   [RFC 0001](rfc/0001-llm-health-dashboard.md) and
   [Epic D](USER_STORIES.md#epic-d-llm-health-dashboard-frontier). Not yet in
   the solution or test tree.
-- **README ⇄ csproj version reconciliation** — fold the stale "0.3.0" README status block to the
-  whole-number `1.0.0` line. Backlog item in [USER_STORIES](USER_STORIES.md#priority-backlog).
-- **nuget.org publish** — the README notes publish-to-nuget.org as the pending release step.
+- **nuget.org publish** — the README notes publish-to-nuget.org as the pending release step
+  (VLT-US-X2 in [USER_STORIES](USER_STORIES.md#priority-backlog)).
 
 ## 8. Quality bar {#VLT-§8}
 A change is **done** ([HOUSE-LAW-8](../../MindAttic.HouseRules.md#HOUSE-LAW-8)) only when:

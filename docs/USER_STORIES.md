@@ -10,7 +10,7 @@ updated: 2026-06-07
 # MindAttic.Vault — User Stories
 > ✅ done (shipped & tested) · 🟡 partial · ⬜ planned · 🗑️ cut. Every ✅ cites the test that proves it.
 > "Consumer" = a .NET host that takes a dependency on the package (Program.cs author / service author).
-> Verified 2026-06-07: `dotnet test MindAttic.Vault.slnx` → 241 passed, 1 skipped.
+> Verified 2026-06-07: `dotnet test MindAttic.Vault.slnx` → Failed: 0, Passed: 241, Total: 241 (exit 0).
 
 ## Epic A — Local credential resolution
 
@@ -94,14 +94,19 @@ updated: 2026-06-07
 
 ## Priority backlog
 Dependency-ordered toward "publish 1.0.0 and ship the health dashboard":
-1. **VLT-US-X1 ⬜** Reconcile README status prose (stale "0.3.0") with the authoritative
+1. **VLT-US-X1 ✅** Reconcile README status prose (stale "0.3.0") with the authoritative
    `<Version>1.0.0</Version>` in the csproj ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)).
+   *(Resolved 2026-06-07: README Status row and Integration plans status line updated to `1.0.0`.)*
 2. **VLT-US-X2 ⬜** Publish `MindAttic.Vault 1.0.0` to nuget.org (README's pending release step).
 3. **VLT-US-D1 → D2 → D3 ⬜** Land the LLM Health Dashboard: add the project to the solution, add a
    test project for the monitor/self-healer, then promote D1–D3 to ✅ with named tests.
 
 ### Audit log
-No story has been changed from an original spec yet; this is the first Codex stories file for the
-repo. The migration source was `README.md` (the de-facto bible) plus the real NUnit suite — no
-prior `user_stories.md` existed. Future spec changes preserve the original ask verbatim here,
-marked "(original spec — audit log)".
+No story spec was changed; each entry below records a status promotion only.
+
+- **2026-06-07 — VLT-US-X1 ⬜→✅** README Status row updated from "0.3.0" to "1.0.0"; Integration
+  plans status line updated to `MindAttic.Vault 1.0.0`. Original spec: *Reconcile README status
+  prose (stale "0.3.0") with the authoritative `<Version>1.0.0</Version>` in the csproj.*
+
+Prior to 2026-06-07: this file was the first Codex stories file for the repo; migration source was
+`README.md` (the de-facto bible) plus the real NUnit suite — no prior `user_stories.md` existed.

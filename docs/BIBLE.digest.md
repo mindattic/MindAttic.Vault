@@ -91,7 +91,7 @@ temp directories — no test ever reads or writes the developer's real `%APPDATA
   `deepseek`) whose votes decide the overall confidence verdict.
 
 ## Status index (from USER_STORIES.md)
-- done: 19 | partial: 1 | planned: 7 | cut: 1
+- done: 21 | partial: 1 | planned: 7 | cut: 1
 
 ## Latest amendment
 - VLT-A2 — Whole-number versioning; csproj is authoritative over README prose (supersedes —)

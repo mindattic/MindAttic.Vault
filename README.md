@@ -14,7 +14,7 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 - **Settings stay roaming, secrets stay cloud-native.** Per-app preferences (theme, layout, last-opened-file) keep following the user across machines via `%APPDATA%`; secrets follow the .NET cloud-native convention and live in `IConfiguration`.
 - **Battle-tested.** 241 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
 
-| Status | **0.3.0** — User Secrets retired; APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 241 NUnit tests green. All 9 consumers bumped to `0.3.0` and stripped of `AddUserSecrets`/`<UserSecretsId>`. |
+| Status | **1.0.0** — Whole-number versioning; APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 241 NUnit tests green. All consumers stripped of `AddUserSecrets`/`<UserSecretsId>`. |
 | --- | --- |
 | Target framework | `net10.0` |
 | Dependencies | `Microsoft.Extensions.Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
@@ -449,7 +449,7 @@ Every applicable consumer has now been integrated. Each project's diff-level pla
 | ✅ 7 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | **DONE.** Static-field IConfiguration injection + Save() leak protection; 29 settings tests pass (commit `bcefece`). |
 | ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
 
-**Status:** all integrations applied. `MindAttic.Vault 0.2.0` and `MindAttic.Legion 2.1.0` are live on nuget.org so every consumer's GitHub Actions CI/CD now resolves the package without local-feed plumbing.
+**Status:** all integrations applied. `MindAttic.Vault 1.0.0` is packed to `C:\LocalNuGet`; publish to nuget.org is the pending release step (see [Contributing & release process](#contributing--release-process)).
 
 Every plan ends with a **rollback** section.
 
