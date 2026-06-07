@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Vault</AssemblyName>
-    <Version>0.3.1</Version>
+    <!-- Whole-number versioning: major-only bumps (1.0.0 → 2.0.0 → 3.0.0). Minor/patch stay 0. -->
+    <Version>1.0.0</Version>
     <PackageId>MindAttic.Vault</PackageId>
     <Title>MindAttic.Vault</Title>
     <Authors>MindAttic</Authors>

@@ -5482,6 +5482,13 @@ window.consoleBg = (function () {
         return { label: 'double helix', verts: verts, edges: edges };
     })();
 
+    // ── Replacement polyhedra (swapped in for the retired harmonograph curve) ──
+    // The harmonograph was the only "lumpy organic blob" in the catalog; these crisp
+    // n-gonal solids replace it so the schematic windows stay on the geometric theme.
+    GEO_SHAPES.pentanti     = (function(){ var s=_ngAnti(5,  1, 0.85); return { label:'pentagonal antiprism',    verts:s.verts, edges:s.edges }; })();
+    GEO_SHAPES.hendecabipy  = (function(){ var s=_ngBipy(11, 1, 1.3);  return { label:'hendecagonal bipyramid',  verts:s.verts, edges:s.edges }; })();
+    GEO_SHAPES.dodecabipy   = (function(){ var s=_ngBipy(12, 1, 1.3);  return { label:'dodecagonal bipyramid',   verts:s.verts, edges:s.edges }; })();
+
     var GEO_KEYS = ['tetra','cube','octa','icosa','flower','metatron','prism','stella','cubocta','antiprism','vesica','spiral','lissajous','star5','torus','helix','dodeca','pyramid','pentaprism','rose','cardioid','asteroid','epicycloid','web','hexprism','hexanti','pentabipy','tribipy','trunctetra','octapyramid','rhombdo','frustum','rhombpara','starbipy',
         // 33 additions (doubles the catalog)
         'heptaprism','octaprism','nonaprism','decaprism','dodecaprism','cylinder',
@@ -5494,9 +5501,15 @@ window.consoleBg = (function () {
         'hendecaprism','tridecaprism','pentadecaprism','hendecanti','tridecanti',
         'octapy','decapy','trunccube','gyropy','dnahelix',
         // +5 additions (creature cycle): parametric curves / knots / fractals
-        'trefoil','fig8knot','koch','sierpinski','harmono',
+        'trefoil','fig8knot','koch','sierpinski',
         // +5 additions (creature cycle batch 2)
-        'klein','hyperpara','trochoid','butterfly','hypocy'];
+        'klein','hyperpara','trochoid','butterfly','hypocy',
+        // harmonograph retired (lumpy organic blob) — replaced by 3 new shapes in each
+        // of the other four styles (equal amounts), so the catalog stays balanced:
+        'pentanti','hendecabipy','dodecabipy',          // 3-D wireframe solids
+        'treeoflife','starofdavid','borromean',         // sacred-geometry constructions
+        'limacon','lemniscate','logspiral',             // polar curves
+        'cinquefoil','hilbert','mobius'];                // knots / fractals / surfaces
 
     function spawnGeoWindow(forceKey) {
         var host = getHost();
@@ -5810,20 +5823,6 @@ window.consoleBg = (function () {
             }
             ctx2.stroke();
         }
-        // Harmonograph — superposed Lissajous with exponential decay envelope
-        function drawHarmono(t) {
-            var R=38, dec=0.0008;
-            ctx2.strokeStyle='rgba(70,210,170,0.65)'; ctx2.lineWidth=0.7;
-            ctx2.beginPath();
-            for(var i=0;i<=800;i++){
-                var u=i*0.04;
-                var env=Math.exp(-u*dec*40);
-                var x=R*env*(Math.sin(2.01*u+t*0.012)+0.6*Math.sin(3.03*u+t*0.018));
-                var y=R*env*(Math.cos(2.99*u+t*0.014)+0.6*Math.cos(2.0*u-t*0.016));
-                if(i===0) ctx2.moveTo(x,y); else ctx2.lineTo(x,y);
-            }
-            ctx2.stroke();
-        }
         // Klein bottle — immersion in R^3, projected to 2D, rotated slowly. Iso-u rings + iso-v meridians.
         function drawKlein(t) {
             var rot=t*0.02, S=16;
@@ -5934,6 +5933,162 @@ window.consoleBg = (function () {
             ctx2.beginPath(); ctx2.arc(0,0,Rc,0,Math.PI*2); ctx2.stroke();
         }
 
+        // ── Harmonograph replacements ─────────────────────────────────────────────
+        // Three new shapes in each of the other four styles, swapped in for the retired
+        // harmonograph: sacred-geometry constructions, polar curves, and knot/fractal/surface
+        // forms. (The 3-D solid trio — pentanti / hendecabipy / dodecabipy — lives in GEO_SHAPES.)
+
+        // ── Sacred-geometry constructions ──
+        // Tree of Life — 10 sephirot on the three pillars, 22 connecting paths.
+        function drawTreeOfLife(t) {
+            var SX=14, SY=6.6, pulse=2.6+Math.sin(t*0.06)*0.4;
+            var nodes=[[0,3],[1,2],[-1,2],[1,1],[-1,1],[0,0],[1,-1],[-1,-1],[0,-2],[0,-3]];
+            var paths=[[0,1],[0,2],[0,5],[1,2],[1,3],[1,5],[2,4],[2,5],[3,4],[3,5],[3,6],[4,5],[4,7],[5,6],[5,7],[5,8],[6,7],[6,8],[6,9],[7,8],[7,9],[8,9]];
+            var P=nodes.map(function(n){ return [n[0]*SX, -n[1]*SY]; });
+            ctx2.strokeStyle='rgba(70,210,170,0.42)'; ctx2.lineWidth=0.6;
+            paths.forEach(function(e){ ctx2.beginPath(); ctx2.moveTo(P[e[0]][0],P[e[0]][1]); ctx2.lineTo(P[e[1]][0],P[e[1]][1]); ctx2.stroke(); });
+            ctx2.strokeStyle='rgba(70,220,170,0.75)'; ctx2.fillStyle='rgba(70,220,170,0.16)'; ctx2.lineWidth=0.7;
+            P.forEach(function(p){ ctx2.beginPath(); ctx2.arc(p[0],p[1],pulse,0,Math.PI*2); ctx2.fill(); ctx2.stroke(); });
+        }
+        // Star of David / Shatkona — two interlocked equilateral triangles + bounding circle.
+        function drawStarOfDavid(t) {
+            var R=36, rot=t*0.02;
+            ctx2.lineWidth=0.8;
+            ctx2.strokeStyle='rgba(70,210,170,0.65)';
+            ctx2.beginPath();
+            for(var i=0;i<=3;i++){ var a=(i/3)*Math.PI*2+rot-Math.PI/2; if(i===0)ctx2.moveTo(Math.cos(a)*R,Math.sin(a)*R); else ctx2.lineTo(Math.cos(a)*R,Math.sin(a)*R); }
+            ctx2.closePath(); ctx2.stroke();
+            ctx2.strokeStyle='rgba(70,200,220,0.55)';
+            ctx2.beginPath();
+            for(var i=0;i<=3;i++){ var a=(i/3)*Math.PI*2+rot-Math.PI/2+Math.PI/3; if(i===0)ctx2.moveTo(Math.cos(a)*R,Math.sin(a)*R); else ctx2.lineTo(Math.cos(a)*R,Math.sin(a)*R); }
+            ctx2.closePath(); ctx2.stroke();
+            ctx2.strokeStyle='rgba(70,220,170,0.25)'; ctx2.lineWidth=0.5;
+            ctx2.beginPath(); ctx2.arc(0,0,R,0,Math.PI*2); ctx2.stroke();
+        }
+        // Borromean rings — three congruent circles whose centres sit on a small triangle.
+        function drawBorromean(t) {
+            var r=20, d=12, rot=t*0.02;
+            var cols=['rgba(70,210,170,0.60)','rgba(70,200,220,0.55)','rgba(120,215,160,0.55)'];
+            for(var i=0;i<3;i++){
+                var a=(i/3)*Math.PI*2+rot-Math.PI/2;
+                ctx2.strokeStyle=cols[i]; ctx2.lineWidth=0.85;
+                ctx2.beginPath(); ctx2.arc(Math.cos(a)*d,Math.sin(a)*d,r,0,Math.PI*2); ctx2.stroke();
+            }
+        }
+
+        // ── Polar curves ──
+        // Limaçon of Pascal — r = a + b·cosθ, with b>a giving the inner loop.
+        function drawLimacon(t) {
+            var a=10, b=20, rot=t*0.015;
+            ctx2.strokeStyle='rgba(70,210,170,0.65)'; ctx2.lineWidth=0.8;
+            ctx2.beginPath();
+            for(var i=0;i<=360;i++){
+                var th=(i/360)*Math.PI*2;
+                var r=a+b*Math.cos(th);
+                var x=r*Math.cos(th+rot), y=r*Math.sin(th+rot);
+                if(i===0) ctx2.moveTo(x,y); else ctx2.lineTo(x,y);
+            }
+            ctx2.stroke();
+            ctx2.strokeStyle='rgba(70,200,220,0.20)'; ctx2.lineWidth=0.5;
+            ctx2.beginPath(); ctx2.arc(0,0,a+b,0,Math.PI*2); ctx2.stroke();
+        }
+        // Lemniscate of Bernoulli — r² = A²·cos(2θ); the classic figure-eight (two lobes).
+        function drawLemniscate(t) {
+            var A=38, rot=t*0.02, started=false;
+            ctx2.strokeStyle='rgba(70,210,170,0.65)'; ctx2.lineWidth=0.85;
+            ctx2.beginPath();
+            for(var i=0;i<=720;i++){
+                var th=(i/720)*Math.PI*2;
+                var c=Math.cos(2*th);
+                if(c<0){ started=false; continue; }
+                var r=A*Math.sqrt(c);
+                var x=r*Math.cos(th+rot), y=r*Math.sin(th+rot);
+                if(!started){ ctx2.moveTo(x,y); started=true; } else ctx2.lineTo(x,y);
+            }
+            ctx2.stroke();
+        }
+        // Logarithmic (equiangular) spiral — r = a·e^{bθ}, a faint mirrored second arm.
+        function drawLogSpiral(t) {
+            var a=2.2, b=0.18, rot=t*0.04, turns=4;
+            ctx2.strokeStyle='rgba(70,210,170,0.65)'; ctx2.lineWidth=0.8;
+            ctx2.beginPath();
+            for(var i=0;i<=600;i++){
+                var th=(i/600)*turns*Math.PI*2;
+                var r=a*Math.exp(b*th);
+                if(r>44) break;
+                var x=r*Math.cos(th+rot), y=r*Math.sin(th+rot);
+                if(i===0) ctx2.moveTo(x,y); else ctx2.lineTo(x,y);
+            }
+            ctx2.stroke();
+            ctx2.strokeStyle='rgba(70,190,220,0.30)'; ctx2.lineWidth=0.5;
+            ctx2.beginPath();
+            for(var i=0;i<=600;i++){
+                var th=(i/600)*turns*Math.PI*2;
+                var r=a*Math.exp(b*th);
+                if(r>44) break;
+                var x=r*Math.cos(th+rot+Math.PI), y=r*Math.sin(th+rot+Math.PI);
+                if(i===0) ctx2.moveTo(x,y); else ctx2.lineTo(x,y);
+            }
+            ctx2.stroke();
+        }
+
+        // ── Knot / fractal / surface forms ──
+        // Cinquefoil (Solomon's seal, (2,5) torus knot) — depth cue via per-segment alpha.
+        function drawCinquefoil(t) {
+            var rot=t*0.022, R=11, p=2, q=5;
+            ctx2.lineWidth=0.85;
+            ctx2.beginPath();
+            for(var i=0;i<=600;i++){
+                var u=(i/600)*Math.PI*2+rot;
+                var rr=2+Math.cos(q*u);
+                var x=rr*Math.cos(p*u), y=rr*Math.sin(p*u), z=Math.sin(q*u);
+                var al=(0.28+0.45*(z*0.5+0.5)).toFixed(2);
+                ctx2.strokeStyle='rgba(70,210,170,'+al+')';
+                if(i===0) ctx2.moveTo(x*R,y*R);
+                else { ctx2.lineTo(x*R,y*R); ctx2.stroke(); ctx2.beginPath(); ctx2.moveTo(x*R,y*R); }
+            }
+        }
+        // Hilbert curve — order-4 space-filling polyline, rotating slowly.
+        function drawHilbert(t) {
+            var Sz=58, order=4, pts=[];
+            function h(x,y,xi,xj,yi,yj,n){
+                if(n<=0){ pts.push([x+(xi+yi)/2, y+(xj+yj)/2]); return; }
+                h(x,y, yi/2,yj/2, xi/2,xj/2, n-1);
+                h(x+xi/2,y+xj/2, xi/2,xj/2, yi/2,yj/2, n-1);
+                h(x+xi/2+yi/2,y+xj/2+yj/2, xi/2,xj/2, yi/2,yj/2, n-1);
+                h(x+xi/2+yi,y+xj/2+yj, -yi/2,-yj/2, -xi/2,-xj/2, n-1);
+            }
+            h(-Sz/2,-Sz/2, Sz,0, 0,Sz, order);
+            ctx2.save(); ctx2.rotate(t*0.01);
+            ctx2.strokeStyle='rgba(70,210,170,0.60)'; ctx2.lineWidth=0.6;
+            ctx2.beginPath();
+            for(var i=0;i<pts.length;i++){ if(i===0)ctx2.moveTo(pts[i][0],pts[i][1]); else ctx2.lineTo(pts[i][0],pts[i][1]); }
+            ctx2.stroke(); ctx2.restore();
+        }
+        // Möbius strip — one-sided surface, two edge loops + center line + rungs, rotating in 3D.
+        function drawMobius(t) {
+            var rot=t*0.02, Sm=20;
+            function M(u,v){
+                var x=(1+(v/2)*Math.cos(u/2))*Math.cos(u);
+                var y=(1+(v/2)*Math.cos(u/2))*Math.sin(u);
+                var z=(v/2)*Math.sin(u/2);
+                var cry=Math.cos(rot), sry=Math.sin(rot);
+                var x1=x*cry+z*sry, z1=-x*sry+z*cry;
+                var crx=Math.cos(0.9), srx=Math.sin(0.9);
+                var y1=y*crx-z1*srx, z2=y*srx+z1*crx;
+                var d=3.2/(3.2+z2*0.5);
+                return [x1*d*Sm, y1*d*Sm];
+            }
+            ctx2.lineWidth=0.6;
+            [[-1,'rgba(70,210,170,0.60)'],[1,'rgba(70,200,220,0.50)'],[0,'rgba(70,220,170,0.35)']].forEach(function(vc){
+                ctx2.strokeStyle=vc[1]; ctx2.beginPath();
+                for(var i=0;i<=120;i++){ var u=(i/120)*Math.PI*2; var pp=M(u,vc[0]); if(i===0)ctx2.moveTo(pp[0],pp[1]); else ctx2.lineTo(pp[0],pp[1]); }
+                ctx2.stroke();
+            });
+            ctx2.strokeStyle='rgba(70,220,170,0.20)'; ctx2.lineWidth=0.5;
+            for(var i=0;i<24;i++){ var u=(i/24)*Math.PI*2; var aa=M(u,-1), bb=M(u,1); ctx2.beginPath(); ctx2.moveTo(aa[0],aa[1]); ctx2.lineTo(bb[0],bb[1]); ctx2.stroke(); }
+        }
+
         function geoFrame() {
             ctx2.clearRect(0,0,S,S);
             ctx2.save(); ctx2.translate(S/2,S/2);
@@ -5955,12 +6110,20 @@ window.consoleBg = (function () {
             else if (key==='fig8knot')   drawFig8Knot(angle);
             else if (key==='koch')       drawKoch(angle);
             else if (key==='sierpinski') drawSierpinski(angle);
-            else if (key==='harmono')    drawHarmono(angle);
             else if (key==='klein')      drawKlein(angle);
             else if (key==='hyperpara')  drawHyperPara(angle);
             else if (key==='trochoid')   drawTrochoid(angle);
             else if (key==='butterfly')  drawButterfly(angle);
             else if (key==='hypocy')     drawHypocy(angle);
+            else if (key==='treeoflife') drawTreeOfLife(angle);
+            else if (key==='starofdavid')drawStarOfDavid(angle);
+            else if (key==='borromean')  drawBorromean(angle);
+            else if (key==='limacon')    drawLimacon(angle);
+            else if (key==='lemniscate') drawLemniscate(angle);
+            else if (key==='logspiral')  drawLogSpiral(angle);
+            else if (key==='cinquefoil') drawCinquefoil(angle);
+            else if (key==='hilbert')    drawHilbert(angle);
+            else if (key==='mobius')     drawMobius(angle);
             else                         drawWire(shape, angle*0.4, angle);
             ctx2.restore();
             rafId = requestAnimationFrame(geoFrame);
