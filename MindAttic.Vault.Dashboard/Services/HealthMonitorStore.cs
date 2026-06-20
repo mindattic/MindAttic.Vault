@@ -42,7 +42,7 @@ public sealed class HealthMonitorStore
         var updated = uptime.AddOrUpdate(providerId,
             _ => (1, healthy ? 1 : 0),
             (_, cur) => (cur.checks + 1, cur.healthy + (healthy ? 1 : 0)));
-        return updated.checks == 0 ? 0 : 100.0 * updated.healthy / updated.checks;
+        return 100.0 * updated.healthy / updated.checks;
     }
 
     /// <summary>Previous snapshot for a provider (used to detect state changes), or null.</summary>
@@ -52,8 +52,12 @@ public sealed class HealthMonitorStore
     /// <summary>Replace the full snapshot set after a sweep and notify subscribers.</summary>
     public void Commit(IEnumerable<ProviderSnapshot> fresh)
     {
-        foreach (var s in fresh)
+        var freshList = fresh.ToList();
+        var freshIds = new HashSet<string>(freshList.Select(s => s.ProviderId), StringComparer.OrdinalIgnoreCase);
+        foreach (var s in freshList)
             snapshots[s.ProviderId] = s;
+        foreach (var staleId in snapshots.Keys.Where(k => !freshIds.Contains(k)).ToList())
+            snapshots.TryRemove(staleId, out _);
         LastSweepUtc = DateTimeOffset.UtcNow;
         SweepInProgress = false;
         OnChanged?.Invoke();
