@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,14 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Credential resolution lives in the local Vault project (the repo this app
-         ships in). It unifies over the Vault 0.3.0 that Legion pulls transitively. -->
-    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Probe + diagnosis + live model discovery â€” reused, not reinvented. -->
+    <!-- Probe + diagnosis + live model discovery - reused, not reinvented. -->
     <PackageReference Include="MindAttic.Legion" Version="21.0.0" />
+    <!-- Credential resolution via the published Vault package. -->
+    <PackageReference Include="MindAttic.Vault" Version="1.0.0" />
 
     <!-- Azure Key Vault as a configuration source (managed identity in App Service). -->
     <PackageReference Include="Azure.Identity" Version="1.13.1" />
