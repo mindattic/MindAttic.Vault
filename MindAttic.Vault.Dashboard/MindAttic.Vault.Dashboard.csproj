@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <!-- Probe + diagnosis + live model discovery - reused, not reinvented. -->
-    <PackageReference Include="MindAttic.Legion" Version="21.0.0" />
+    <PackageReference Include="MindAttic.Legion" Version="22.0.0" />
     <!-- Credential resolution via the published Vault package. -->
     <PackageReference Include="MindAttic.Vault" Version="1.0.0" />
 
