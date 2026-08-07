@@ -2,7 +2,7 @@
 
 **Goal:** retire `MindAttic.Legion.MindAtticCredentialStore` (363 lines) in favour of `MindAttic.Vault.Credentials.LlmCredentialResolver`, with a thin static shim left behind so existing call sites don't have to change in lockstep.
 
-**Why first:** every Blazor app (Tutor, ThinkTank, IdiotProof, StreetSamurai, TaxRateCollector) consumes Legion. Doing Legion first means downstream apps inherit the Vault transparently the moment they bump the Legion package version.
+**Why first:** every Blazor app (Tutor, ThinkTank, IdiotProof, Prose, TaxRateCollector) consumes Legion. Doing Legion first means downstream apps inherit the Vault transparently the moment they bump the Legion package version.
 
 **Cloud-native impact:** once Legion runs through Vault, its `LegionClient` reads keys from User Secrets (dev) and Azure App Service Application Settings (prod) automatically — no Legion-side changes required. Today Legion is file-only; after this plan it inherits the full source-precedence chain documented in the [README](../README.md).
 

@@ -251,7 +251,7 @@ html, body {
 /* ====================================================================
  * MindAttic.UiUx - cyberspace/frontpage.css
  * Cyberpunk console-background (CYBERSPACE) effects system.
- * Lifted from StreetSamurai/wwwroot/app.css (lines 1079-1803).
+ * Lifted from Prose/wwwroot/app.css (lines 1079-1803).
  * Canonical source. DO NOT EDIT downstream copies - edit here and re-sync.
  * ==================================================================== */
 
@@ -4863,7 +4863,7 @@ window.consoleBg = (function () {
     // Baked-in selectors (any host gets these for free):
     //   .cyberspace-keepout     — opt-in marker; add to any container you want protected
     //   main             — top-level page content (mindattic.com #content lives here)
-    //   .home-content    — StreetSamurai Home page wrapper
+    //   .home-content    — Prose Home page wrapper
     //   .board-grid      — any tab/tile board
     //
     // Hosts can extend the list via window.__cyberspaceKeepoutSelectors (CSS selector
@@ -6351,7 +6351,7 @@ window.consoleBg = (function () {
 
     // Hosts can override these by defining window.__cyberspaceCircuitboardSrcs = [a, b, c]
     // before this script loads. mindattic.com inlines them as base64 data URIs;
-    // StreetSamurai leaves the default (/api/media/... served by MediaController).
+    // Prose leaves the default (/api/media/... served by MediaController).
     var TEX_SRCS = (typeof window !== 'undefined' && window.__cyberspaceCircuitboardSrcs) || [
         '/api/media/circuitboard.00.png',
         '/api/media/circuitboard.01.png',
@@ -9756,7 +9756,7 @@ A cloud-native credentials &amp; settings library for .NET that gives every app 
 <thead>
 <tr>
 <th>Status</th>
-<th><strong>0.2.0</strong> — published to nuget.org and <code>C:\LocalNuGet</code>. 223 NUnit tests green. <strong>Integrated into 7 of 8 consumers</strong> (Legion, FractionsOfACent, ThinkTank, Tutor, IdiotProof, StreetSamurai, TaxRateCollector); per-project plans live in <a href="IntegrationPlans/"><code>IntegrationPlans/</code></a>.</th>
+<th><strong>0.2.0</strong> — published to nuget.org and <code>C:\LocalNuGet</code>. 223 NUnit tests green. <strong>Integrated into 7 of 8 consumers</strong> (Legion, FractionsOfACent, ThinkTank, Tutor, IdiotProof, Prose, TaxRateCollector); per-project plans live in <a href="IntegrationPlans/"><code>IntegrationPlans/</code></a>.</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -10060,7 +10060,7 @@ JsonSettingsStore&lt;MyData&gt;.ForLocalApp(<span class="hljs-string">&quot;MyAp
 <pre><code class="language-csharp">VaultPaths.RoamingRoot;                  <span class="hljs-comment">// %APPDATA%\MindAttic</span>
 VaultPaths.LocalRoot;                    <span class="hljs-comment">// %LOCALAPPDATA%\MindAttic</span>
 VaultPaths.RoamingBucket(<span class="hljs-string">&quot;LLM&quot;</span>);         <span class="hljs-comment">// %APPDATA%\MindAttic\LLM</span>
-VaultPaths.LocalApp(<span class="hljs-string">&quot;StreetSamurai&quot;</span>);    <span class="hljs-comment">// %LOCALAPPDATA%\MindAttic\StreetSamurai</span>
+VaultPaths.LocalApp(<span class="hljs-string">&quot;Prose&quot;</span>);    <span class="hljs-comment">// %LOCALAPPDATA%\MindAttic\Prose</span>
 VaultPaths.Ensure(path);                 <span class="hljs-comment">// mkdir -p</span>
 </code></pre>
 <p>Override either root for tests with <code>MINDATTIC_VAULT_ROAMING_ROOT</code> / <code>MINDATTIC_VAULT_LOCAL_ROOT</code>.</p>
@@ -10187,8 +10187,8 @@ full cloud-native end-to-end flow:</p>
 </tr>
 <tr>
 <td>✅ 6</td>
-<td>StreetSamurai</td>
-<td><a href="IntegrationPlans/StreetSamurai.md"><code>StreetSamurai.md</code></a></td>
+<td>Prose</td>
+<td><a href="IntegrationPlans/Prose.md"><code>Prose.md</code></a></td>
 <td><strong>DONE.</strong> ResolveApiKey now consults VaultConfiguration first; 21 settings tests pass (commit <code>18b9993</code>).</td>
 </tr>
 <tr>

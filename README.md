@@ -359,7 +359,7 @@ Path math — replaces `Path.Combine(Environment.GetFolderPath(...), "MindAttic"
 VaultPaths.RoamingRoot;                  // %APPDATA%\MindAttic
 VaultPaths.LocalRoot;                    // %LOCALAPPDATA%\MindAttic
 VaultPaths.RoamingBucket("LLM");         // %APPDATA%\MindAttic\LLM
-VaultPaths.LocalApp("StreetSamurai");    // %LOCALAPPDATA%\MindAttic\StreetSamurai
+VaultPaths.LocalApp("Prose");    // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p
 ```
 
@@ -445,7 +445,7 @@ Every applicable consumer has now been integrated. Each project's diff-level pla
 | ✅ 3 | ThinkTank | [`ThinkTank.md`](IntegrationPlans/ThinkTank.md) | **DONE.** SettingsServiceVaultOverlay layered on existing factory; 252 tests pass (commit `05bbb30`). |
 | ✅ 4 | Tutor | [`Tutor.md`](IntegrationPlans/Tutor.md) | **DONE.** Forward-looking DI wiring only; 338 tests pass (commit `5b33913`). |
 | ✅ 5 | IdiotProof | [`IdiotProof.md`](IntegrationPlans/IdiotProof.md) | **DONE.** Duplicate BrokerCredentialStore deleted; OverlayFromConfiguration added; 105 tests pass (commit `b1e7dcf`). |
-| ✅ 6 | StreetSamurai | [`StreetSamurai.md`](IntegrationPlans/StreetSamurai.md) | **DONE.** ResolveApiKey now consults VaultConfiguration first; 21 settings tests pass (commit `18b9993`). |
+| ✅ 6 | Prose | [`Prose.md`](IntegrationPlans/Prose.md) | **DONE.** ResolveApiKey now consults VaultConfiguration first; 21 settings tests pass (commit `18b9993`). |
 | ✅ 7 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | **DONE.** Static-field IConfiguration injection + Save() leak protection; 29 settings tests pass (commit `bcefece`). |
 | ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
 

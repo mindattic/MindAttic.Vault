@@ -96,7 +96,7 @@ public static class VaultPaths
 
     /// <summary>
     /// Local data directory for a given app (e.g. <c>"IdiotProof"</c>,
-    /// <c>"StreetSamurai"</c>). Does not create the directory.
+    /// <c>"Prose"</c>). Does not create the directory.
     /// </summary>
     /// <param name="app">App folder name. Required.</param>
     /// <returns>Absolute path to the app directory under <see cref="LocalRoot"/>.</returns>
