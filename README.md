@@ -12,9 +12,9 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 - **Backward-compatible with `%APPDATA%`.** Legacy `providers.json` keyrings keep working — they're surfaced as a first-class `IConfigurationSource`, so the cutover is zero-risk for existing dev installs.
 - **Read-only in production, writable on the laptop.** Configuration-backed stores throw on writes; production deploys never mutate secrets at runtime. Settings UIs land safely in the file-backed fallback.
 - **Settings stay roaming, secrets stay cloud-native.** Per-app preferences (theme, layout, last-opened-file) keep following the user across machines via `%APPDATA%`; secrets follow the .NET cloud-native convention and live in `IConfiguration`.
-- **Battle-tested.** 241 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
+- **Battle-tested.** 252 NUnit tests cover every public type — atomic writes, malformed-input recovery, source precedence, scalar coercion, and full cloud-native end-to-end DI flows.
 
-| Status | **1.0.0** — Whole-number versioning; APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 241 NUnit tests green. All consumers stripped of `AddUserSecrets`/`<UserSecretsId>`. |
+| Status | **2.0.0** — Added `FtpCredentialStore` (`%APPDATA%\MindAttic\Ftp\ftp.json`) for MindAttic.Deploy/MindAttic.Bob. APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 252 NUnit tests green. All consumers stripped of `AddUserSecrets`/`<UserSecretsId>`. |
 | --- | --- |
 | Target framework | `net10.0` |
 | Dependencies | `Microsoft.Extensions.Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
@@ -73,6 +73,7 @@ MindAttic.Vault
 │   ├── CredentialStore                       # Generic 3-tier file store
 │   ├── LlmCredentialStore                    # File store at %APPDATA%\MindAttic\LLM
 │   ├── BrokerCredentialStore                 # File store at %APPDATA%\MindAttic\Brokers
+│   ├── FtpCredentialStore                    # File store at %APPDATA%\MindAttic\Ftp (flat, single record)
 │   ├── TokenStore                            # Single-secret bucket (GitHub, USPS, ...)
 │   ├── ConfigurationCredentialStore          # IConfiguration-backed read view (cloud-native)
 │   ├── CompositeCredentialStore              # Chains stores; first non-null wins
@@ -144,10 +145,16 @@ The on-disk layout follows one invariant — **folder name == config section ==
 | `Subtitles` | `providers.json` | `{ OpenSubtitles: { user, password } }` |
 | `Notifications` | `providers.json` | `{ twilio:{...}, email:{...}, to:"...", toEmail:"..." }` |
 | `AudioStore` | `providers.json` | `{ provider, container, connectionString }` |
+| `Ftp` | `ftp.json` | `{ host, port, user, password, secure, servername }` (flat, single record) |
 
-`MindAtticConfigurationSource` scans every bucket above by default and flattens each
-file (nested objects, arrays, and top-level scalars) into `IConfiguration`, so the same
-keys resolve whether they came from disk, env vars, or Key Vault.
+`MindAtticConfigurationSource` scans every bucket above **except `Ftp`** by default and
+flattens each file (nested objects, arrays, and top-level scalars) into `IConfiguration`,
+so the same keys resolve whether they came from disk, env vars, or Key Vault. `Ftp` is a
+deliberate exception — it's a deploy-time credential for MindAttic.Deploy (and read
+directly by MindAttic.Bob), never something an Azure App Service/Key Vault needs to
+surface, so it stays a plain file-only store (`FtpCredentialStore`) with no
+`IConfiguration`/cloud-native resolver path. Pass `Buckets` explicitly to include it if a
+future consumer needs otherwise.
 
 ## Source precedence (read order)
 
@@ -205,7 +212,14 @@ LlmCredentialStore.Default.SetKey("claude", "sk-ant-...");           // LLM\prov
 BrokerCredentialStore.Default.SetBrokerCreds("alpaca-paper",
     new BrokerCredentialStore.BrokerCreds("PK...", "S...", null));   // Brokers\providers.json
 TokenStore.ForBucket("Tokens").Set("github", "ghp_...");             // Tokens\tokens.json
+FtpCredentialStore.Default.Set(new FtpCredentialStore.FtpCreds(
+    "ftp.example.com", 21, "user@example.com", "pw", true,
+    "prod.example.net", null));                                      // Ftp\ftp.json
 ```
+
+`FtpCredentialStore.Default.TryGetJson()` hands back the exact flat JSON blob
+MindAttic.Deploy's `MINDATTIC_FTP_JSON` env var expects — a direct drop-in, no
+reshaping needed at the call site.
 
 Equivalently, `%APPDATA%\MindAttic\LLM\providers.json`:
 
@@ -408,6 +422,7 @@ full cloud-native end-to-end flow:
 - `CredentialStore` — 3-tier precedence, malformed JSON, atomic write + `.bak`, sibling field preservation, argument validation, constructor guards
 - `LlmCredentialStore` — type inference (anthropic / google / bearer), model + maxTokens preservation, `Default` singleton, malformed-existing recovery
 - `BrokerCredentialStore` — full record I/O, partial-rotate preservation, type inference (alpaca prefix), wrong-type-field defence, argument validation, `Default` singleton
+- `FtpCredentialStore` — flat-record I/O, legacy `secrets/ftp.json` field-name compatibility (`servername`, `_rejectUnauthorized`), `TryGetJson()` shape for `MINDATTIC_FTP_JSON`, `Default` singleton, env var override, argument validation
 - `TokenStore` — read/write/remove, case insensitivity, atomic swap (`.bak`), `ForBucket`, malformed/empty file handling, argument validation
 - `JsonSettingsStore<T>` — round-trip, defaults on malformed, `Update` semantics, factories (`ForApp` / `ForLocalApp` / `ForBucket`), custom JSON options, argument validation
 - `KeyResolver` — chain, throw-survive, every step builder (`Explicit` / `Env` / `EnvByConvention` / `FromStore` / `FromConfiguration`), normalisation, custom suffixes, argument validation
@@ -426,7 +441,7 @@ Run them:
 dotnet test D:\Projects\MindAttic\MindAttic.Vault\MindAttic.Vault.slnx
 ```
 
-**No real `%APPDATA%` is touched** — every test redirects via env vars (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`) or temp directories.
+**No real `%APPDATA%` is touched** — every test redirects via env vars (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`, `MINDATTIC_FTP_CREDENTIALS`) or temp directories.
 
 **Documentation:** the package now ships an XML documentation file (`MindAttic.Vault.xml`) so consumers see IntelliSense for every public type and member.
 
@@ -448,8 +463,9 @@ Every applicable consumer has now been integrated. Each project's diff-level pla
 | ✅ 6 | Prose | [`Prose.md`](IntegrationPlans/Prose.md) | **DONE.** ResolveApiKey now consults VaultConfiguration first; 21 settings tests pass (commit `18b9993`). |
 | ✅ 7 | TaxRateCollector | [`TaxRateCollector.md`](IntegrationPlans/TaxRateCollector.md) | **DONE.** Static-field IConfiguration injection + Save() leak protection; 29 settings tests pass (commit `bcefece`). |
 | ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
+| ✅ 9 | MindAttic.Deploy | [`MindAttic.Deploy.md`](IntegrationPlans/MindAttic.Deploy.md) | **DONE.** New `FtpCredentialStore`; `DeployRunner` bridges Vault → `MINDATTIC_FTP_JSON` for the Node pipeline. |
 
-**Status:** all integrations applied. `MindAttic.Vault 1.0.0` is packed to `C:\LocalNuGet`; publish to nuget.org is the pending release step (see [Contributing & release process](#contributing--release-process)).
+**Status:** all integrations applied. `MindAttic.Vault 2.0.0` is packed to `C:\LocalNuGet`; publish to nuget.org is the pending release step (see [Contributing & release process](#contributing--release-process)).
 
 Every plan ends with a **rollback** section.
 
