@@ -16,8 +16,9 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 
 | Status | **2.0.0** — Added `FtpCredentialStore` (`%APPDATA%\MindAttic\Ftp\ftp.json`) for MindAttic.Deploy/MindAttic.Bob. APPDATA is the single local source of truth (folder == `MindAttic:Vault:<Bucket>`). Packed to `C:\LocalNuGet`; **publish to nuget.org is the pending release step**. 252 NUnit tests green. All consumers stripped of `AddUserSecrets`/`<UserSecretsId>`. |
 | --- | --- |
-| Target framework | `net10.0` |
-| Dependencies | `Microsoft.Extensions.Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
+| Target frameworks | `net9.0` and `net10.0` (multi-targeted; consumers on either TFM get a matching build) |
+| Dependencies (all pinned `9.0.0` for cross-TFM compatibility) | `Microsoft.Extensions.Configuration`, `Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions`, `Options` |
+| Package | [`MindAttic.Vault`](https://github.com/mindattic/MindAttic.Vault) on the family's local NuGet feed (`C:\LocalNuGet`); nuget.org publish pending |
 
 ---
 
@@ -33,10 +34,16 @@ Stop hand-rolling `Load()` / `Save()` / `OverlayFromEnvironment()` plumbing in e
 8. [Quickstart — Azure Container Apps / AKS / anywhere with Key Vault](#quickstart--azure-container-apps--aks--anywhere-with-key-vault)
 9. [Reference — public types](#reference--public-types)
 10. [Settings vs. credentials — where each lives](#settings-vs-credentials--where-each-lives)
-11. [Testing strategy](#testing-strategy)
-12. [Integration plans (per-project rollout)](#integration-plans-per-project-rollout)
-13. [Contributing & release process](#contributing--release-process)
-14. [FAQ](#faq)
+11. [Repository layout](#repository-layout)
+12. [MindAttic.Vault.Dashboard — LLM health monitor](#mindatticvaultdashboard--llm-health-monitor)
+13. [How sibling repos consume Vault](#how-sibling-repos-consume-vault)
+14. [Testing strategy](#testing-strategy)
+15. [Build, test, and pack](#build-test-and-pack)
+16. [Integration plans (per-project rollout)](#integration-plans-per-project-rollout)
+17. [Contributing & release process](#contributing--release-process)
+18. [Documentation map (Codex layers)](#documentation-map-codex-layers)
+19. [Glossary](#glossary)
+20. [FAQ](#faq)
 
 ---
 
@@ -57,7 +64,7 @@ Adding a new MindAttic app today means copy-pasting 60–200 lines of credential
 2. **Backward compatible.** Existing developers with keys in `%APPDATA%\MindAttic\LLM\providers.json` lose nothing. The file source is exposed as a first-class `IConfigurationSource` so legacy keys flow into `IConfiguration` automatically.
 3. **Settings stay roaming, secrets move into config.** Per-app preferences (theme, layout, last-opened-file) continue to live in `%APPDATA%\MindAttic\<app>\settings.json` because they should follow the user across machines. Secrets follow the .NET cloud-native convention and live in `IConfiguration`.
 4. **Read-only in production.** `ConfigurationCredentialStore` doesn't write back to `IConfiguration`. Mutations from a settings UI land in the file-backed fallback; production deploys never write secrets at runtime.
-5. **No Azure SDK in the core package.** The Azure path is "register `AddAzureKeyVault(...)` upstream and Vault reads from `IConfiguration`." Zero Azure-only dependencies in `MindAttic.Vault`.
+5. **No Azure SDK in the core package.** The Azure path is "register `AddAzureKeyVault(...)` upstream and Vault reads from `IConfiguration`." Zero Azure-only dependencies in `MindAttic.Vault`. (The one place Azure packages *do* appear in this repo is the standalone `MindAttic.Vault.Dashboard` app — see [§12](#mindatticvaultdashboard--llm-health-monitor) — which is never part of the published package.)
 
 ## What's in the package
 
@@ -89,6 +96,8 @@ MindAttic.Vault
 └── Settings/
     └── JsonSettingsStore<T>                  # Generic Load/Save/Update for per-app JSON config
 ```
+
+Every public type ships XML doc comments (`MindAttic.Vault.xml` is emitted at build time), so IntelliSense in a consuming project explains behaviour, edge cases, and exceptions inline — this README covers the *shape* of the surface; the XML docs are the line-level reference.
 
 ## Standard configuration schema
 
@@ -270,7 +279,7 @@ builder.Configuration
 builder.Services.AddMindAtticVault(builder.Configuration);
 ```
 
-Name secrets in Key Vault using `--` as the section separator: `MindAttic--Vault--LLM--claude--apiKey`. The default `KeyVaultSecretManager` translates `--` to `:` so they land at the right spot in `IConfiguration`. **No custom code in Vault.**
+Name secrets in Key Vault using `--` as the section separator: `MindAttic--Vault--LLM--claude--apiKey`. The default `KeyVaultSecretManager` translates `--` to `:` so they land at the right spot in `IConfiguration`. **No custom code in Vault.** (`MindAttic.Vault.Dashboard` in this repo is a real, working example of this pattern — see [§12](#mindatticvaultdashboard--llm-health-monitor).)
 
 ## Reference — public types
 
@@ -290,6 +299,8 @@ VaultConfigurationKeys.SubtitlesSection;     // "MindAttic:Vault:Subtitles"
 VaultConfigurationKeys.NotificationsSection; // "MindAttic:Vault:Notifications"
 VaultConfigurationKeys.AudioStoreSection;    // "MindAttic:Vault:AudioStore"
 ```
+
+`ProviderSection(bucketSection, providerId)` and `ProviderApiKeyPath(bucketSection, providerId)` build the colon-delimited paths to a specific provider's section / `apiKey` leaf (e.g. `MindAttic:Vault:LLM:claude:apiKey`) — both argument-validated (throw `ArgumentException` on null/whitespace).
 
 ### `MindAtticConfigurationSource` (`MindAttic.Vault.Configuration`)
 
@@ -317,9 +328,9 @@ public class MyService(LlmCredentialResolver llm)
 
 Reads walk: `IConfiguration` → file fallback → null. Writes go to the file fallback only.
 
-### `LlmCredentialStore` / `BrokerCredentialStore` (`MindAttic.Vault.Credentials`)
+### `LlmCredentialStore` / `BrokerCredentialStore` / `FtpCredentialStore` (`MindAttic.Vault.Credentials`)
 
-File-only stores at `%APPDATA%\MindAttic\<bucket>\providers.json`. Drop-in replacements for the legacy `MindAttic.Legion.MindAtticCredentialStore` and `IdiotProof.Engine.Settings.BrokerCredentialStore`. Still injectable for code that genuinely wants the file path (rare).
+File-only stores at `%APPDATA%\MindAttic\<bucket>\`. `LlmCredentialStore`/`BrokerCredentialStore` are drop-in replacements for the legacy `MindAttic.Legion.MindAtticCredentialStore` and `IdiotProof.Engine.Settings.BrokerCredentialStore`. `FtpCredentialStore` is the newest addition (2.0.0) — a single flat record at `Ftp\ftp.json`, deliberately excluded from `IConfiguration` projection (see the bucket table above). All three implement the same `ICredentialStore` contract: `GetKey` / `SetKey`, `LoadAll` / `LoadAllRaw`, `ListProviders`, `SaveAllRaw` / `SaveRaw`, plus a `Default` singleton that honors an env-var directory override for tests (`MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`, `MINDATTIC_FTP_CREDENTIALS`). Still injectable for code that genuinely wants the file path (rare).
 
 ### `ConfigurationCredentialStore` (`MindAttic.Vault.Credentials`)
 
@@ -330,6 +341,8 @@ ConfigurationCredentialStore.ForLlm(builder.Configuration);     // MindAttic:Vau
 ConfigurationCredentialStore.ForBrokers(builder.Configuration); // MindAttic:Vault:Brokers
 new ConfigurationCredentialStore(cfg, "MyApp:Custom:Bucket");   // arbitrary path
 ```
+
+Every write method (`SetKey`, `SaveAllRaw`, `SaveRaw`) throws `NotSupportedException` — this is the type that enforces "read-only in production."
 
 ### `CompositeCredentialStore` (`MindAttic.Vault.Credentials`)
 
@@ -359,6 +372,8 @@ store.Update(s => s.Theme = "dark");
 JsonSettingsStore<MyData>.ForLocalApp("MyApp");
 ```
 
+Writes are atomic (`.tmp` + `File.Replace` with a `.bak` retained) and serialized under a per-instance `SemaphoreSlim`, so concurrent `Save`/`Update` calls from the same process never tear the file. `LoadAsync` / `SaveAsync` / `UpdateAsync` mirror the sync API with `CancellationToken` support. Reads always degrade to `new T()` on a missing or malformed file — a settings load never throws or crashes a host.
+
 Register from DI:
 
 ```csharp
@@ -377,7 +392,7 @@ VaultPaths.LocalApp("Prose");    // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p
 ```
 
-Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` / `MINDATTIC_VAULT_LOCAL_ROOT`.
+Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` / `MINDATTIC_VAULT_LOCAL_ROOT`. On non-Windows hosts the same properties resolve to `~/.config/MindAttic` and `~/.local/share/MindAttic/<app>` via the standard `Environment.SpecialFolder` lookup.
 
 ### `EnvironmentOverlay` (`MindAttic.Vault.Paths`)
 
@@ -402,6 +417,16 @@ var resolver = KeyResolver
 var key = resolver.Resolve("claude");
 ```
 
+### `ServiceCollectionExtensions` (`MindAttic.Vault.DependencyInjection`)
+
+```csharp
+services.AddMindAtticVault();                          // file-only stores (console/desktop, no IConfiguration)
+services.AddMindAtticVault(builder.Configuration);      // cloud-native: Composite(Config → File)
+services.AddVaultAppSettings<MySettings>("MyApp");      // roaming JsonSettingsStore<T>
+```
+
+`AddMindAtticVault()` registers the file-backed `LlmCredentialStore`/`BrokerCredentialStore` singletons and an `ICredentialStore` defaulting to LLM. `AddMindAtticVault(IConfiguration)` additionally registers `LlmCredentialResolver`/`BrokerCredentialResolver` (config-first, file-fallback composites) — inject the resolvers from new code, the concrete stores only when legacy code needs the literal file path.
+
 ## Settings vs. credentials — where each lives
 
 | What | Where | Roaming? | Why |
@@ -411,9 +436,137 @@ var key = resolver.Resolve("claude");
 | **Per-app preferences** (theme, layout, "last opened file") | `%APPDATA%\MindAttic\<app>\settings.json` | yes | Follows user across machines; not a secret. |
 | **Per-machine caches & data** (SQL data dir, evidence files, large blobs) | `%LOCALAPPDATA%\MindAttic\<app>\` | no | Big, machine-specific, not worth roaming. |
 
+## Repository layout
+
+This repo ships more than the NuGet package. Top level (tests, docs and node/tooling `bin`/`obj`/`node_modules` omitted):
+
+```
+MindAttic.Vault/                     (repo root)
+├── MindAttic.Vault/                 The published library — see "What's in the package" above.
+│   └── MindAttic.Vault.csproj       net9.0;net10.0, PackageId=MindAttic.Vault, <Version>2.0.0</Version>
+├── MindAttic.Vault.Tests/           NUnit 4 suite (net10.0), InternalsVisibleTo target, not packable.
+│   ├── *Tests.cs                    One fixture per public type (see "Testing strategy").
+│   └── TempDirectory.cs             Test helper — a self-cleaning temp dir for file-store tests.
+├── MindAttic.Vault.Dashboard/       Blazor Server LLM-health-monitor app — see §12. NOT in the
+│   │                                 solution, NOT part of the published package.
+│   ├── Components/                 Razor pages/layout (Home.razor is the dashboard UI).
+│   └── Services/                   LlmHealthMonitor, HealthMonitorStore, MonitorBackgroundService,
+│                                    SelfHealer, AlertDispatcher, HealthModels (records/enums).
+├── MindAttic.Vault.slnx             Solution file — lists ONLY MindAttic.Vault + MindAttic.Vault.Tests.
+├── IntegrationPlans/                 Historical, diff-level per-consumer rollout plans (§16).
+├── docs/                             Codex documentation layers — see §18.
+│   ├── BIBLE.md                     L0 — architecture, Laws, verified state, glossary.
+│   ├── AMENDMENTS.md                 L1 — append-only change log; an amendment wins over the bible.
+│   ├── USER_STORIES.md               L2 — test-cited user stories.
+│   ├── BIBLE.digest.md               GENERATED by tools/codex.ps1 digest — never hand-edit.
+│   └── rfc/0001-llm-health-dashboard.md  Design note for the Dashboard (§12).
+├── tools/
+│   └── codex.ps1                     Codex CLI: `doctor` (validate docs/) and `digest` (regenerate).
+├── nuget.config                      Package sources: local family feed (C:\LocalNuGet) + nuget.org.
+├── package.json / node_modules/      A SEPARATE toolchain (marked + highlight.js) that renders
+│                                      index.htm — the mindattic.com marketing landing page. Unrelated
+│                                      to the package or to README.htm; do not confuse the two.
+├── index.htm                         Rendered landing page (own pipeline; not touched by README tooling).
+├── README.md                          This file.
+└── LICENSE                            MIT.
+```
+
+## MindAttic.Vault.Dashboard — LLM health monitor
+
+`MindAttic.Vault.Dashboard` is a standalone Blazor Server app (`net10.0`, `Microsoft.NET.Sdk.Web`) that answers a question Vault itself can't: *are the LLM keys the family holds still good?* A key can be revoked, hit a quota, or point at a model id that's been deprecated upstream — Vault has no opinion on any of that, it only resolves what's on disk/in config. The Dashboard probes every keyed provider on a schedule and renders a traffic-light health view.
+
+**Status:** in-flight (see [RFC 0001](docs/rfc/0001-llm-health-dashboard.md) and [Epic D](docs/USER_STORIES.md#epic-d-llm-health-dashboard-frontier)). It is **not** listed in `MindAttic.Vault.slnx`, has no dedicated test project, and is not built or tested by the normal `dotnet build`/`dotnet test` commands in this repo — build/run it directly from its own project file. It is never part of the published `MindAttic.Vault` NuGet package (that would violate the "no Azure SDK in the core" design principle).
+
+**What it depends on** (per `MindAttic.Vault.Dashboard.csproj`): `MindAttic.Vault 1.0.0` (the published NuGet package — this app is a real consumer of Vault, not a fork of it), `MindAttic.Legion 22.0.0` (for probing/diagnosis/live model discovery), and `Azure.Identity` + `Azure.Extensions.AspNetCore.Configuration.Secrets` (direct Key Vault wiring — the one place in this repo those packages appear).
+
+**How it resolves credentials** (`Program.cs`):
+
+```csharp
+builder.Configuration
+    .AddMindAtticVaultFiles()      // %APPDATA%\MindAttic canonical files (dev)
+    .AddEnvironmentVariables();    // App Service Application Settings
+
+var keyVaultUri = builder.Configuration["MindAttic:Vault:KeyVaultUri"];
+if (!string.IsNullOrWhiteSpace(keyVaultUri))
+    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+
+MindAtticCredentialStore.UseConfiguration(builder.Configuration); // hands config to Legion's probes
+```
+
+This is the same wiring shown in [§8](#quickstart--azure-container-apps--aks--anywhere-with-key-vault), applied for real: locally it reads `%APPDATA%\MindAttic\LLM\providers.json`; in Azure App Service with `MindAttic:Vault:KeyVaultUri` set, it resolves straight from Key Vault via managed identity.
+
+**Domain model** (`Services/HealthModels.cs`):
+- **`ProviderStatus`** — `Unknown` / `Healthy` (green) / `Degraded` (amber — authenticated but drifted, or self-healed this sweep) / `Down` (red — unreachable, key rejected, quota, or deprecated model).
+- **`ProviderSnapshot`** — an immutable point-in-time record per provider: status, diagnosis, HTTP code, latency, consecutive-failure count, uptime %, and an optional `SelfHealNote`.
+- **`MonitorOptions`** (bound from the `Monitor` config section) — sweep `Interval` (default hourly), `ProbeTimeout` (default 30s), the `TrustedProviders` panel (`claude`, `openai`, `gemini`, `deepseek` by default), `MonitorAllKeyed` (probe every other keyed provider too, informational only), `SelfHealModels` (auto-repoint a deprecated model id), and `Webhooks[]` / `Email` alert targets.
+- **`AlertEvent`** — raised when a provider's status changes between sweeps; consumed by `AlertDispatcher`.
+
+**Services:** `LlmHealthMonitor` runs the actual probes; `HealthMonitorStore` holds the latest snapshot per provider and the overall "trusted panel healthy" verdict; `MonitorBackgroundService` is the `IHostedService` driving the scheduled sweep; `SelfHealer` repoints deprecated-model pointers; `AlertDispatcher` sends email/webhook notifications on state change.
+
+**UI (`Home.razor`):** a verdict banner at the top ("Trusted panel is ONLINE & queryable" / "DEGRADED — action needed", green/red) with a manual "Re-check now" button, then two card grids — the trusted voting panel first, then all other keyed providers grouped as informational.
+
+**Running it locally:**
+
+```powershell
+cd MindAttic.Vault.Dashboard
+dotnet run
+# https://localhost:7242 or http://localhost:5242 (see Properties/launchSettings.json)
+```
+
+Configuration lives in `appsettings.json` / `appsettings.Development.json`: leave `MindAttic:Vault:KeyVaultUri` empty to use the local `%APPDATA%\MindAttic\LLM\providers.json` file; set it to an Azure Key Vault URI to probe via managed identity in App Service.
+
+**Trusted panel:** the live-network test `TrustedPanel_EveryKeyAuthenticatesLive` exists conceptually for this app but is skipped in CI (it needs real keys and network access) — it proves nothing offline and should never be cited as evidence the Dashboard epic is done. See [RFC 0001](docs/rfc/0001-llm-health-dashboard.md) for the full phased plan (add to the solution, add an offline-tested project, then promote the Epic D stories).
+
+## How sibling repos consume Vault
+
+At least 17 repos in the workspace reference the `MindAttic.Vault` package, including `MindAttic.Launcher`, `MindAttic.Legion`, `MindAttic.Authentication`, `MindAttic.Deploy.Cli`, `MindAttic.Mobile`, `MindAttic.Psst`, `MediaButler`, `IdiotProof.Engine`, `Prose.Core`/`Prose.LlmCli`, `TaxRateCollector.Infrastructure`, `ThinkTank.Core`, `Tutor.Core`, and `OpenCredentials.Shared` — a superset of the projects tracked in [`IntegrationPlans/`](IntegrationPlans/), which records the original, diff-level rollout for the first wave of consumers (§16).
+
+A concrete example — `MindAttic.Launcher` consumes two different corners of Vault for two different jobs:
+
+**File-only credential lookup** (`MindAttic.Launcher/Services/ProviderCredentials.cs`) — pushing an agent CLI's API key into a child process's environment right before launch, with a missing/blank Vault entry treated as a no-op (the CLI falls back to however it's already configured):
+
+```csharp
+using MindAttic.Vault.Credentials;
+
+public static class ProviderCredentials
+{
+    public static void Apply(ProcessStartInfo psi, string providerKey, ICredentialStore? store = null)
+    {
+        var key = (store ?? LlmCredentialStore.Default).GetKey(providerKey);
+        if (string.IsNullOrWhiteSpace(key)) return;
+        psi.Environment["GEMINI_API_KEY"] = key; // (per-provider mapping in the real file)
+    }
+}
+```
+
+Note this consumer only needs the writable file store directly (`LlmCredentialStore.Default`) — it's a console launcher with no `IConfiguration`/DI host, so it skips the cloud-native resolver entirely and calls the file-backed `ICredentialStore` contract straight.
+
+**Per-app settings via `JsonSettingsStore<T>`** (`MindAttic.Launcher/Services/SettingsStore.cs`) — wraps `JsonSettingsStore<AppSettings>.ForApp("MindAttic.Launcher")`, so the launcher's settings land at `%APPDATA%\MindAttic\MindAttic.Launcher\settings.json`, with a one-time seed from a legacy pre-Vault settings file if the Vault-managed file doesn't exist yet:
+
+```csharp
+public sealed class SettingsStore
+{
+    public const string AppBucket = "MindAttic.Launcher";
+    private readonly JsonSettingsStore<AppSettings> store;
+
+    public SettingsStore() : this(JsonSettingsStore<AppSettings>.ForApp(AppBucket), DefaultLegacySettingsPath) { }
+
+    public AppSettings Load()
+    {
+        if (!store.Exists()) SeedFromLegacyIfPresent();
+        return store.Load();
+    }
+
+    public void Save(AppSettings settings) => store.Save(settings);
+    public AppSettings Update(Action<AppSettings> mutate) => store.Update(mutate);
+}
+```
+
+Both patterns — direct file-store injection for CLIs/console apps with no DI host, and `JsonSettingsStore<T>.ForApp(...)` for roaming per-app settings — are the two most common ways a MindAttic host takes a dependency on Vault without needing the full cloud-native `IConfiguration` chain. Reach for the resolvers (`LlmCredentialResolver`/`BrokerCredentialResolver`) instead when the host is a web/worker app with a real `IConfiguration` (see [§6](#quickstart--local-dev)–[§8](#quickstart--azure-container-apps--aks--anywhere-with-key-vault) and the Dashboard in [§12](#mindatticvaultdashboard--llm-health-monitor)).
+
 ## Testing strategy
 
-**Unit & integration:** 241 NUnit tests covering every public type, including
+**Unit & integration:** 252 NUnit tests covering every public type, including
 argument validation, malformed-input handling, atomic-write behaviour, and the
 full cloud-native end-to-end flow:
 
@@ -441,11 +594,36 @@ Run them:
 dotnet test D:\Projects\MindAttic\MindAttic.Vault\MindAttic.Vault.slnx
 ```
 
-**No real `%APPDATA%` is touched** — every test redirects via env vars (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`, `MINDATTIC_FTP_CREDENTIALS`) or temp directories.
+Confirmed locally: `dotnet test MindAttic.Vault.slnx` → `Passed: 252, Failed: 0, Skipped: 0, Total: 252` (net10.0). The suite also builds and would run identically against `net9.0` — the two TFMs share the same test project.
 
-**Documentation:** the package now ships an XML documentation file (`MindAttic.Vault.xml`) so consumers see IntelliSense for every public type and member.
+**No real `%APPDATA%` is touched** — every test redirects via env vars (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`, `MINDATTIC_FTP_CREDENTIALS`) or temp directories (see `TempDirectory.cs`).
 
-**About Cypress / browser E2E:** Vault is a class library with no UI surface. Cypress (or Playwright) doesn't apply here — there is no DOM to drive. Each *consumer* project (Tutor, ThinkTank, IdiotProof, …) has its own Cypress suite that exercises the credential surface through its own UI; those suites continue to work unchanged after the swap because Vault preserves the on-disk shape and resolution semantics. The integration plan for each consumer calls out which Cypress specs to re-run. The `CloudNativeIntegrationTests` fixture in this repo is the equivalent end-to-end coverage at the library level.
+**Documentation:** the package ships an XML documentation file (`MindAttic.Vault.xml`) so consumers see IntelliSense for every public type and member. `CS1591` (missing XML doc warning) is suppressed only for the few internal-but-public surfaces already covered by a type-level summary.
+
+**About Cypress / browser E2E:** Vault is a class library with no UI surface. Cypress (or Playwright) doesn't apply here — there is no DOM to drive. Each *consumer* project (Tutor, ThinkTank, IdiotProof, …) has its own Cypress suite that exercises the credential surface through its own UI; those suites continue to work unchanged after the swap because Vault preserves the on-disk shape and resolution semantics. The integration plan for each consumer calls out which Cypress specs to re-run. The `CloudNativeIntegrationTests` fixture in this repo is the equivalent end-to-end coverage at the library level. `MindAttic.Vault.Dashboard` has no Cypress/Playwright coverage either — see the caveats in [§12](#mindatticvaultdashboard--llm-health-monitor).
+
+## Build, test, and pack
+
+```powershell
+# Build both target frameworks
+dotnet build MindAttic.Vault.slnx
+
+# Run the full NUnit suite (must be green before packing)
+dotnet test MindAttic.Vault.slnx
+
+# Pack to the family's local NuGet feed (see nuget.config)
+dotnet pack MindAttic.Vault\MindAttic.Vault.csproj -c Release -o C:\LocalNuGet
+
+# Validate the docs/ Codex canon (front-matter, IDs, links, cited tests/paths, digest freshness)
+powershell -File tools\codex.ps1 doctor
+
+# Regenerate docs/BIBLE.digest.md after editing BIBLE.md §1/§3/§5/§9 or the latest amendment
+powershell -File tools\codex.ps1 digest
+```
+
+**Versioning:** whole-number, major-only — `MindAttic.Vault.csproj`'s `<Version>` goes `1.0.0` → `2.0.0` → `3.0.0`, never `2.1.0`. The csproj is the single authoritative version source; if any prose elsewhere in the repo disagrees, the csproj wins (see [`VLT-A2`](docs/AMENDMENTS.md#vlt-a2--whole-number-versioning-csproj-is-authoritative-over-readme-prose-supersedes)).
+
+**`MindAttic.Vault.Dashboard`** is not part of `MindAttic.Vault.slnx` and is not covered by `dotnet build`/`dotnet test` above — build and run it directly from its own project (`dotnet build` / `dotnet run` inside `MindAttic.Vault.Dashboard/`), per [§12](#mindatticvaultdashboard--llm-health-monitor).
 
 ## Integration plans (per-project rollout)
 
@@ -465,16 +643,45 @@ Every applicable consumer has now been integrated. Each project's diff-level pla
 | ⚪ 8 | GridGame2026 | [`GridGame2026.md`](IntegrationPlans/GridGame2026.md) | Documented skip — Unity, no creds. |
 | ✅ 9 | MindAttic.Deploy | [`MindAttic.Deploy.md`](IntegrationPlans/MindAttic.Deploy.md) | **DONE.** New `FtpCredentialStore`; `DeployRunner` bridges Vault → `MINDATTIC_FTP_JSON` for the Node pipeline. |
 
-**Status:** all integrations applied. `MindAttic.Vault 2.0.0` is packed to `C:\LocalNuGet`; publish to nuget.org is the pending release step (see [Contributing & release process](#contributing--release-process)).
+**Status:** all integrations applied. `MindAttic.Vault 2.0.0` is packed to `C:\LocalNuGet`; publish to nuget.org is the pending release step (see [Contributing & release process](#contributing--release-process)). Several more repos have since taken a dependency on the published package outside this historical table — see [§13](#how-sibling-repos-consume-vault) for the current, verified list.
 
 Every plan ends with a **rollback** section.
 
 ## Contributing & release process
 
-- Bump the `<Version>` in `MindAttic.Vault.csproj` whenever public surface changes.
+- Bump the `<Version>` in `MindAttic.Vault.csproj` whenever public surface changes — whole-number major bumps only (`1.0.0` → `2.0.0` → `3.0.0`), never a minor/patch bump.
 - `dotnet test` must be green before packaging.
 - `dotnet pack -c Release -o C:\LocalNuGet` publishes to the family's local NuGet feed.
 - After a version bump, update each consumer's `<PackageReference Version=...>` lazily — only when that project's integration plan is being executed.
+- If you touch `docs/BIBLE.md`, `docs/AMENDMENTS.md`, or `docs/USER_STORIES.md`, run `powershell -File tools/codex.ps1 doctor` afterward and make sure it exits 0 — see [§18](#documentation-map-codex-layers).
+
+## Documentation map (Codex layers)
+
+This repo follows the MindAttic **Codex** documentation standard: a fact lives in exactly one layer, and other layers link to it by stable ID rather than restating it. This README is the practical "how to build/run/consume" layer; the canon below is "how to think about the system":
+
+| Layer | File | What it's for |
+| --- | --- | --- |
+| **L0 — Bible** | [`docs/BIBLE.md`](docs/BIBLE.md) | What Vault IS / is NOT, architecture, the Laws (`VLT-LAW-*`), verified state, glossary. Stable section IDs `{#VLT-§N}`. |
+| **L1 — Amendments** | [`docs/AMENDMENTS.md`](docs/AMENDMENTS.md) | Append-only change log (`VLT-A<n>`). An amendment **wins** over the bible — never rewritten, only superseded. |
+| **L2 — User stories** | [`docs/USER_STORIES.md`](docs/USER_STORIES.md) | Stories `VLT-US-<Epic><n>`; every `✅` cites the NUnit test that proves it. |
+| **RFC** | [`docs/rfc/`](docs/rfc/) | Design notes for in-flight work (currently just [RFC 0001](docs/rfc/0001-llm-health-dashboard.md), the Dashboard). Graduates into L0 + L2 once shipped. |
+| **Generated** | [`docs/BIBLE.digest.md`](docs/BIBLE.digest.md) | Produced by `tools/codex.ps1 digest`. **Never hand-edit** — regenerate it instead. |
+
+Validate the whole canon any time with `powershell -File tools/codex.ps1 doctor` (checks front-matter, unique IDs, resolvable cross-refs, cited tests/paths, and digest freshness; must exit 0).
+
+## Glossary
+
+A short, practical glossary for reading this README and the Vault source. For the authoritative, longer-form version (including the full domain model), see [`docs/BIBLE.md` §9](docs/BIBLE.md#VLT-§9).
+
+- **Bucket** — a credential category whose folder name under `%APPDATA%\MindAttic\` is identical to its config section's last segment (`LLM`, `Brokers`, `Tokens`, `Subtitles`, `Notifications`, `AudioStore`, `Ftp`).
+- **Provider** — one keyed entry inside a bucket, e.g. `claude` inside `LLM`, or `alpaca-paper` inside `Brokers`.
+- **Credential** — the resolved secret value for a provider (an `apiKey`, a broker `secret`, a bare token).
+- **Source** — anything the resolution chain can read from: an `IConfigurationSource` (Key Vault, env vars, appsettings, the APPDATA file projection) or a store passed explicitly via DI.
+- **Store** — a concrete `ICredentialStore` implementation: file-backed (`CredentialStore` and its `LlmCredentialStore`/`BrokerCredentialStore`/`FtpCredentialStore` specializations), configuration-backed (`ConfigurationCredentialStore`, read-only), or chained (`CompositeCredentialStore`).
+- **Resolver** — a `CompositeCredentialStore` preset that chains configuration in front of a file store (`LlmCredentialResolver`, `BrokerCredentialResolver`) — what new DI-based code should inject.
+- **Setting** — a non-secret, per-app preference persisted via `JsonSettingsStore<T>`, as opposed to a credential.
+- **Roaming vs. local** — roaming data lives under `%APPDATA%` and follows the Windows user across machines; local data lives under `%LOCALAPPDATA%` and stays on the current machine (caches, evidence files, large blobs).
+- **Trusted panel** — (Dashboard-specific) the gating provider set (`claude`, `openai`, `gemini`, `deepseek` by default) whose combined health decides the Dashboard's overall confidence verdict.
 
 ## FAQ
 
@@ -488,9 +695,12 @@ You shouldn't. `ConfigurationCredentialStore` throws `NotSupportedException` on 
 Anything that produces an `IConfiguration` works. AWS Secrets Manager and GCP Secret Manager both have community providers — register them upstream of `AddMindAtticVault(...)` and Vault picks the values up the same way.
 
 **Q. Why didn't you ship `MindAttic.Vault.Azure`?**
-Azure App Service Application Settings (with optional Key Vault references) cover ~95% of MindAttic's intended deployment targets and need zero Azure SDK. The remaining 5% (direct Key Vault SDK with Managed Identity) is one line of upstream wiring with the existing `Azure.Extensions.AspNetCore.Configuration.Secrets` package — not worth a separate Vault package. If a real production scenario emerges, we'll add a thin companion package then.
+Azure App Service Application Settings (with optional Key Vault references) cover ~95% of MindAttic's intended deployment targets and need zero Azure SDK. The remaining 5% (direct Key Vault SDK with Managed Identity) is one line of upstream wiring with the existing `Azure.Extensions.AspNetCore.Configuration.Secrets` package — not worth a separate Vault package. `MindAttic.Vault.Dashboard` (§12) is exactly that remaining 5%, built as its own app rather than a Vault companion package.
 
 **Q. How do I rotate a secret?**
 - Dev: edit the APPDATA bucket file (`%APPDATA%\MindAttic\LLM\providers.json`) or call `LlmCredentialStore.Default.SetKey("claude", "new-key")`. Because nothing ranks above it locally, the new value takes effect immediately — no stale store can mask it.
 - Prod (App Service): edit the Application Setting in the portal; restart the app slot.
 - Prod (Key Vault): create a new secret version. App Service Key Vault references re-resolve on app restart; direct `AddAzureKeyVault(...)` calls re-load on the cadence you configured.
+
+**Q. Is `MindAttic.Vault.Dashboard` something I can depend on?**
+Not yet as a package — it isn't published and isn't in the solution. It's a working example of Vault + Key Vault + Legion wired together in a real Blazor app; read its `Program.cs` for a concrete Azure Container Apps-style wiring, but treat its own feature set (health probing, alerting, self-healing) as in-flight per [RFC 0001](docs/rfc/0001-llm-health-dashboard.md).
