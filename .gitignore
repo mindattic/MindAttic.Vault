@@ -1,4 +1,4 @@
-bin/
+﻿bin/
 obj/
 *.user
 *.suo
@@ -12,4 +12,4 @@ TestResults/
 scripts/cli/deploy.settings.json
 node_modules/
 package-lock.json
-.claude/checkpoint.md
+.claude/quicksave.md
