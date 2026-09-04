@@ -92,6 +92,20 @@ updated: 2026-06-07
   between sweeps, and deprecated-model pointers optionally self-heal within the sweep interval.
   *(Planned; `SelfHealer`/`AlertDispatcher` services exist in the working tree, untested here.)*
 
+- **VLT-US-C7 ✅** As an app author, Vault resolves its roots on **any** OS — Windows, Linux, macOS,
+  iOS, Android — and never aborts my host at startup because the platform has no user profile.
+  *`VaultPaths` walks an ordered chain (override → `SpecialFolder` → platform convention → `$HOME` →
+  application base) and reports which rule won via `ResolveRoaming()`/`ResolveLocal()`/`Describe()`.
+  See [VLT-A3](AMENDMENTS.md).* *(tests: `VaultPathsResolutionTests.Override_WinsAndIsUsedVerbatim`,
+  `BlankOverride_IsTreatedAsUnset`, `SpecialFolder_IsPreferredWhenTheHostProvidesOne`,
+  `SpecialFolder_ThatThrows_FallsThroughInsteadOfPropagating`, `Windows_FallsBackToAppDataVariables`,
+  `Linux_UsesXdgWhenSet`, `Linux_FallsBackToTheXdgDefaultsUnderHome`,
+  `Apple_UsesLibraryApplicationSupport`, `WindowsWithoutAppData_StillFindsTheUserProfile`,
+  `NoUserProfileAtAll_ResolvesBesideTheBinariesInsteadOfThrowing`,
+  `EveryBranchReturnsARootedNonBlankPath`, `PublicRootsResolveOnThisHostAndAreReportable` —
+  every environment dependency is injected, so the Linux-container branch is covered from a Windows
+  agent. 265 tests green.)*
+
 ## Priority backlog
 Dependency-ordered toward "publish 1.0.0 and ship the health dashboard":
 1. **VLT-US-X1 ✅** Reconcile README status prose (stale "0.3.0") with the authoritative

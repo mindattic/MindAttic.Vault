@@ -5,7 +5,7 @@ code: VLT
 layer: digest
 status: generated
 generatedFrom: VLT-§1,VLT-§3,VLT-§5,VLT-§9
-updated: 2026-06-07
+updated: 2026-09-04
 ---
 
 # MindAttic.Vault — BIBLE digest
@@ -91,7 +91,7 @@ temp directories — no test ever reads or writes the developer's real `%APPDATA
   `deepseek`) whose votes decide the overall confidence verdict.
 
 ## Status index (from USER_STORIES.md)
-- done: 21 | partial: 1 | planned: 7 | cut: 1
+- done: 22 | partial: 1 | planned: 7 | cut: 1
 
 ## Latest amendment
-- VLT-A2 — Whole-number versioning; csproj is authoritative over README prose (supersedes —)
+- VLT-A3 — Root resolution is cross-platform and never throws (supersedes —)

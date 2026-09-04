@@ -33,3 +33,35 @@ version source.
 **Migration.** None to code. Documentation reconciliation is tracked as
 [VLT-US-X1](USER_STORIES.md#priority-backlog); the README prose should be updated to `1.0.0` when
 that backlog item is taken.
+
+## VLT-A3 — Root resolution is cross-platform and never throws (supersedes —)
+**What changed (2026-09-04).** `VaultPaths` resolves the roaming and local roots through an ordered
+chain instead of a single `Environment.GetFolderPath` call that threw when the host had no answer:
+
+1. `MINDATTIC_VAULT_ROAMING_ROOT` / `MINDATTIC_VAULT_LOCAL_ROOT`, used verbatim.
+2. The matching `Environment.SpecialFolder` — the normal answer on Windows, macOS, iOS and Android.
+3. The platform convention read from the environment: `%APPDATA%`/`%LOCALAPPDATA%` on Windows,
+   `~/Library/Application Support` on Apple, `$XDG_CONFIG_HOME`/`$XDG_DATA_HOME` (else `~/.config`
+   and `~/.local/share`) on Linux and Android.
+4. `$HOME`/`%USERPROFILE%` → `.mindattic/{config,data}`.
+5. `{AppContext.BaseDirectory}/.mindattic/{config,data}`.
+
+`ResolveRoaming()` / `ResolveLocal()` return the path **and** the `VaultRootSource` that produced it,
+and `Describe()` prints both for startup diagnostics.
+
+**Why.** `Environment.GetFolderPath` returns an empty string — it does not throw — on hosts with no
+user profile, and Vault turned that into an `InvalidOperationException`. Because Vault is wired into
+the `IConfiguration` chain, that throw happened during **host construction**: on a Linux App Service
+worker the process aborted with SIGABRT before a single line of application code ran, and the stack
+trace pointed at `ConfigurationBuilder`, not at a missing folder. MindAttic.Ideas hit exactly this on
+its first Azure deployment. Requiring every Linux/container consumer to set an env var made the
+library the odd one out; resolving properly on every OS is the library's job.
+
+**Compatibility.** Steps 3–5 only run where step 2 previously **threw**, so no host that already
+worked resolves anywhere new — Windows still lands on `%APPDATA%\MindAttic`. The public surface is
+additive (`VaultRootSource`, `VaultRootResolution`, `ResolveRoaming`, `ResolveLocal`, `Describe`);
+the documented `InvalidOperationException` is simply no longer thrown.
+
+**Migration.** None. Consumers that added `MINDATTIC_VAULT_ROAMING_ROOT` purely to get past the
+crash can drop it; as an explicit override it still wins where it is genuinely wanted. Package goes
+to **3.0.0** ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)).
