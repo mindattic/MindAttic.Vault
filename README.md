@@ -84,6 +84,7 @@ MindAttic.Vault
 │   ├── TokenStore                            # Single-secret bucket (GitHub, USPS, ...)
 │   ├── ConfigurationCredentialStore          # IConfiguration-backed read view (cloud-native)
 │   ├── CompositeCredentialStore              # Chains stores; first non-null wins
+│   ├── AppScopedCredentialStore              # Namespaces provider ids under "{appId}-" (4.0.0)
 │   ├── LlmCredentialResolver                 # Composite(Config → File) for LLM
 │   └── BrokerCredentialResolver              # Composite(Config → File) for Brokers
 ├── DependencyInjection/
@@ -347,6 +348,30 @@ Every write method (`SetKey`, `SaveAllRaw`, `SaveRaw`) throws `NotSupportedExcep
 ### `CompositeCredentialStore` (`MindAttic.Vault.Credentials`)
 
 Chains any number of stores. Reads walk in order; writes target the first writable store. Both `LlmCredentialResolver` and `BrokerCredentialResolver` are subclasses of this with two preset stores.
+
+### `AppScopedCredentialStore` (`MindAttic.Vault.Credentials`)
+
+The BYOK pattern every LLM-consuming MindAttic app shares: each app keeps its own key for a
+provider (so testing a key in one app never changes what another app resolves), falling back to
+the shared cross-app id when it has none of its own. `AppScopedCredentialStore` wraps any inner
+store and namespaces every provider id under `"{appId}-"`; compose it in front of the shared store
+with `CompositeCredentialStore` to get "own key, else shared" for free:
+
+```csharp
+var keys = new CompositeCredentialStore(
+    new AppScopedCredentialStore("automata", LlmCredentialStore.Default),
+    LlmCredentialStore.Default); // or LlmCredentialResolver for cloud-native reads
+
+keys.GetKey("claude");            // "automata-claude" if set, else the shared "claude"
+keys.SetKey("claude", "sk-...");  // always writes "automata-claude", never the shared entry
+```
+
+`LoadAll`/`ListProviders`/`LoadAllRaw` on the scoped instance surface only that app's own
+prefixed entries (prefix stripped); `SaveAllRaw` is a read-modify-write that replaces only those
+entries, leaving every other app's (and the shared) entries in the same physical file untouched.
+Replaces the one-off `<App>ProviderId.For(id) => $"{app}-{id}"` helpers each consumer used to
+hand-roll (`AutomataProviderId`, `TutorProviderId`, `ThinkTankProviderId`, ...) with one tested
+Vault type.
 
 ### `TokenStore` (`MindAttic.Vault.Credentials`)
 
