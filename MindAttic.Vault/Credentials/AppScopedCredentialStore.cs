@@ -30,7 +30,7 @@ namespace MindAttic.Vault.Credentials;
 /// and <c>"automata-beta"</c> would collide) — the same assumption every hand-written
 /// <c>&lt;App&gt;ProviderId.For</c> helper this type replaces already made.</para>
 /// </summary>
-public sealed class AppScopedCredentialStore : ICredentialStore
+public sealed class AppScopedCredentialStore : ICredentialStore, IRotatingKeyStore
 {
     private readonly string prefix;
     private readonly ICredentialStore inner;
@@ -93,6 +93,28 @@ public sealed class AppScopedCredentialStore : ICredentialStore
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("providerId is required.", nameof(providerId));
         inner.SaveRaw(prefix + providerId, rawProviderJson);
+    }
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Thrown when the inner store doesn't support key pools.</exception>
+    public IReadOnlyList<CredentialPoolEntry> GetKeys(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return Array.Empty<CredentialPoolEntry>();
+        if (inner is not IRotatingKeyStore rotating)
+            throw new NotSupportedException($"{inner.GetType().Name} does not support key pools.");
+        return rotating.GetKeys(prefix + providerId);
+    }
+
+    /// <inheritdoc />
+    /// <exception cref="ArgumentException">Thrown when <paramref name="providerId"/> is null or whitespace.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the inner store doesn't support key pools.</exception>
+    public void SetKeys(string providerId, IReadOnlyList<CredentialPoolEntry> keys)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("providerId is required.", nameof(providerId));
+        if (inner is not IRotatingKeyStore rotating)
+            throw new NotSupportedException($"{inner.GetType().Name} does not support key pools.");
+        rotating.SetKeys(prefix + providerId, keys);
     }
 
     private bool IsOwnKey(string providerId) =>

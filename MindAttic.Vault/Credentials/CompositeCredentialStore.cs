@@ -25,7 +25,7 @@ namespace MindAttic.Vault.Credentials;
 /// <para><b>Failure handling:</b> a throwing inner store is treated as "no value"
 /// for that layer, so a misbehaving store cannot break the chain.</para>
 /// </summary>
-public class CompositeCredentialStore : ICredentialStore, IDisposable
+public class CompositeCredentialStore : ICredentialStore, IRotatingKeyStore, IDisposable
 {
     private readonly IReadOnlyList<ICredentialStore> stores;
     // int (not bool) so Dispose can flip it atomically — two concurrent Dispose()
@@ -92,6 +92,30 @@ public class CompositeCredentialStore : ICredentialStore, IDisposable
     /// <inheritdoc />
     public void SetKey(string providerId, string apiKey) =>
         WritableStore.SetKey(providerId, apiKey);
+
+    /// <inheritdoc />
+    /// <remarks>Walks in declared order; the first store with a non-empty pool wins.</remarks>
+    public IReadOnlyList<CredentialPoolEntry> GetKeys(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return Array.Empty<CredentialPoolEntry>();
+        foreach (var store in stores)
+        {
+            if (store is not IRotatingKeyStore rotating) continue;
+            IReadOnlyList<CredentialPoolEntry>? value;
+            try { value = rotating.GetKeys(providerId); } catch { value = null; }
+            if (value is { Count: > 0 }) return value;
+        }
+        return Array.Empty<CredentialPoolEntry>();
+    }
+
+    /// <inheritdoc />
+    /// <exception cref="NotSupportedException">Thrown when <see cref="WritableStore"/> doesn't support key pools.</exception>
+    public void SetKeys(string providerId, IReadOnlyList<CredentialPoolEntry> keys)
+    {
+        if (WritableStore is not IRotatingKeyStore rotating)
+            throw new NotSupportedException($"{WritableStore.GetType().Name} does not support key pools.");
+        rotating.SetKeys(providerId, keys);
+    }
 
     /// <inheritdoc />
     public Dictionary<string, string> LoadAll()

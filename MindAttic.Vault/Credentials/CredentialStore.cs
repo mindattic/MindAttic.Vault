@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace MindAttic.Vault.Credentials;
 
@@ -25,7 +26,7 @@ namespace MindAttic.Vault.Credentials;
 /// process are serialised by an internal lock. Cross-process safety relies on the
 /// atomic <see cref="File.Replace(string, string, string?)"/> swap.</para>
 /// </summary>
-public class CredentialStore : ICredentialStore
+public class CredentialStore : ICredentialStore, IRotatingKeyStore
 {
     /// <summary>Filename of the canonical rich-format providers file.</summary>
     public const string ProvidersJsonFile   = "providers.json";
@@ -65,23 +66,48 @@ public class CredentialStore : ICredentialStore
     public bool ProvidersFileExists() => File.Exists(ProvidersFilePath);
 
     /// <inheritdoc />
-    public string? GetKey(string providerId)
-    {
-        if (string.IsNullOrWhiteSpace(providerId)) return null;
-        // No directory means no keys — short-circuit before any file probe.
-        if (!System.IO.Directory.Exists(Directory)) return null;
+    /// <remarks>Equivalent to the first entry of <see cref="GetKeys"/>.</remarks>
+    public string? GetKey(string providerId) => GetKeys(providerId).FirstOrDefault()?.Key;
 
-        // 1. Per-provider .key file (highest priority — manual override).
+    /// <inheritdoc />
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="providerId"/> is null or whitespace.
+    /// </exception>
+    /// <remarks>Equivalent to <see cref="SetKeys"/> with a single-entry pool.</remarks>
+    public void SetKey(string providerId, string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+            throw new ArgumentException("Provider ID is required.", nameof(providerId));
+
+        // Treat null as empty — the caller may be intentionally clearing a key.
+        SetKeys(providerId, new[] { new CredentialPoolEntry(apiKey ?? "") });
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<CredentialPoolEntry> GetKeys(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return Array.Empty<CredentialPoolEntry>();
+        // No directory means no keys — short-circuit before any file probe.
+        if (!System.IO.Directory.Exists(Directory)) return Array.Empty<CredentialPoolEntry>();
+
+        // 1. Per-provider .key file (highest priority — manual override). Always a
+        // single-key "pool" — there's no multi-key syntax for this override file.
         var keyFile = Path.Combine(Directory, providerId + KeyFileExtension);
         if (File.Exists(keyFile))
         {
             var raw = ReadFileSafe(keyFile);
-            if (!string.IsNullOrWhiteSpace(raw)) return raw.Trim();
+            if (!string.IsNullOrWhiteSpace(raw))
+                return new[] { new CredentialPoolEntry(raw.Trim()) };
         }
 
-        // 2. providers.json (canonical rich format).
-        var fromProviders = TryReadProvidersJsonKey(providerId);
-        if (!string.IsNullOrWhiteSpace(fromProviders)) return fromProviders.Trim();
+        // 2. providers.json (canonical rich format) — the "apiKeys" pool array when
+        // present, else the single "apiKey" field wrapped as a one-element pool.
+        var providers = LoadProvidersRawSafe();
+        if (providers.TryGetValue(providerId, out var json))
+        {
+            var pool = ExtractApiKeysFromProviderJson(json);
+            if (pool.Count > 0) return pool;
+        }
 
         // 3. credentials.json (legacy flat format).
         var jsonFile = Path.Combine(Directory, CredentialsJsonFile);
@@ -89,36 +115,38 @@ public class CredentialStore : ICredentialStore
         {
             var all = ParseFlatJsonSafe(jsonFile);
             if (all.TryGetValue(providerId, out var key) && !string.IsNullOrWhiteSpace(key))
-                return key.Trim();
+                return new[] { new CredentialPoolEntry(key.Trim()) };
         }
 
-        return null;
+        return Array.Empty<CredentialPoolEntry>();
     }
 
     /// <inheritdoc />
     /// <exception cref="ArgumentException">
     /// Thrown when <paramref name="providerId"/> is null or whitespace.
     /// </exception>
-    public void SetKey(string providerId, string apiKey)
+    public void SetKeys(string providerId, IReadOnlyList<CredentialPoolEntry> keys)
     {
         if (string.IsNullOrWhiteSpace(providerId))
             throw new ArgumentException("Provider ID is required.", nameof(providerId));
 
-        // Treat null as empty — the caller may be intentionally clearing a key.
-        var trimmed = apiKey?.Trim() ?? "";
+        var pool = (keys ?? Array.Empty<CredentialPoolEntry>())
+            .Where(k => !string.IsNullOrWhiteSpace(k.Key))
+            .Select(k => new CredentialPoolEntry(k.Key.Trim(), string.IsNullOrWhiteSpace(k.Label) ? null : k.Label!.Trim()))
+            .ToList();
 
         lock (writeLock)
         {
             System.IO.Directory.CreateDirectory(Directory);
 
-            // Read-modify-write: pull the current map, splice in the new apiKey
-            // (subclasses get to decide how the splice handles their richer schema),
-            // then atomically replace the file.
+            // Read-modify-write: pull the current map, splice in the new primary
+            // apiKey (subclasses get to decide how the splice handles their richer
+            // schema) then layer the full pool on top, then atomically replace the file.
             var providers = LoadProvidersRawSafe();
-            providers[providerId] = MergeApiKeyIntoProviderJson(
-                existingJson: providers.TryGetValue(providerId, out var existing) ? existing : null,
-                providerId: providerId,
-                apiKey: trimmed);
+            var existingJson = providers.TryGetValue(providerId, out var existing) ? existing : null;
+            var primaryKey = pool.Count > 0 ? pool[0].Key : "";
+            var withPrimary = MergeApiKeyIntoProviderJson(existingJson, providerId, primaryKey);
+            providers[providerId] = MergeApiKeysIntoProviderJson(withPrimary, pool);
 
             WriteProvidersJson(providers);
         }
@@ -238,21 +266,47 @@ public class CredentialStore : ICredentialStore
     }
 
     /// <summary>Pulls the <c>apiKey</c> string field out of a per-provider JSON object.</summary>
-    private static string? ExtractApiKeyFromProviderJson(string? json)
+    private static string? ExtractApiKeyFromProviderJson(string? json) =>
+        ExtractApiKeysFromProviderJson(json).FirstOrDefault()?.Key;
+
+    /// <summary>
+    /// Pulls the key pool out of a per-provider JSON object: the <c>apiKeys</c> array
+    /// when present and non-empty, else the single <c>apiKey</c> field wrapped as a
+    /// one-element pool.
+    /// </summary>
+    private static List<CredentialPoolEntry> ExtractApiKeysFromProviderJson(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return null;
+        var result = new List<CredentialPoolEntry>();
+        if (string.IsNullOrWhiteSpace(json)) return result;
         try
         {
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("apiKey", out var apiKey)
-                && apiKey.ValueKind == JsonValueKind.String)
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return result;
+
+            if (doc.RootElement.TryGetProperty("apiKeys", out var apiKeys) && apiKeys.ValueKind == JsonValueKind.Array)
             {
-                return apiKey.GetString();
+                foreach (var entry in apiKeys.EnumerateArray())
+                {
+                    if (entry.ValueKind != JsonValueKind.Object) continue;
+                    if (!entry.TryGetProperty("key", out var keyProp) || keyProp.ValueKind != JsonValueKind.String) continue;
+                    var key = keyProp.GetString();
+                    if (string.IsNullOrWhiteSpace(key)) continue;
+                    var label = entry.TryGetProperty("label", out var labelProp) && labelProp.ValueKind == JsonValueKind.String
+                        ? labelProp.GetString()
+                        : null;
+                    result.Add(new CredentialPoolEntry(key.Trim(), label));
+                }
+                if (result.Count > 0) return result;
+            }
+
+            if (doc.RootElement.TryGetProperty("apiKey", out var single) && single.ValueKind == JsonValueKind.String)
+            {
+                var key = single.GetString();
+                if (!string.IsNullOrWhiteSpace(key)) result.Add(new CredentialPoolEntry(key.Trim()));
             }
         }
         catch { /* swallow — same posture as the rest of the store. */ }
-        return null;
+        return result;
     }
 
     /// <summary>
@@ -316,6 +370,43 @@ public class CredentialStore : ICredentialStore
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    /// <summary>
+    /// Splices an <c>apiKeys</c> pool array onto an already-built provider JSON object
+    /// (the output of <see cref="MergeApiKeyIntoProviderJson"/>, which has already
+    /// handled the primary <c>apiKey</c> mirror and any schema-specific fields).
+    /// Only emits the array when there's more than one key — a provider with a
+    /// single key keeps looking exactly like it did before this feature existed.
+    /// </summary>
+    /// <param name="providerJson">The provider's JSON object after the primary-key merge.</param>
+    /// <param name="pool">The full pool being written, in priority order.</param>
+    protected virtual string MergeApiKeysIntoProviderJson(string providerJson, IReadOnlyList<CredentialPoolEntry> pool)
+    {
+        JsonObject obj;
+        try
+        {
+            obj = JsonNode.Parse(providerJson) as JsonObject ?? new JsonObject();
+        }
+        catch
+        {
+            obj = new JsonObject();
+        }
+
+        obj.Remove("apiKeys");
+        if (pool.Count > 1)
+        {
+            var arr = new JsonArray();
+            foreach (var entry in pool)
+            {
+                var entryObj = new JsonObject { ["key"] = entry.Key };
+                if (!string.IsNullOrWhiteSpace(entry.Label)) entryObj["label"] = entry.Label;
+                arr.Add(entryObj);
+            }
+            obj["apiKeys"] = arr;
+        }
+
+        return obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
     /// <summary>
