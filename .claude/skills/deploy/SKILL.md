@@ -1,17 +1,12 @@
 ---
 name: deploy
-description: Deploy the MindAttic.Vault landing page (mindattic.com/mindatticvault.htm) via MindAttic.Deploy (sibling repo). Renders this repo's README.md through the catalog template and FTPS-uploads the single-file result.
+description: MindAttic.Vault has no web deploy -- its GitHub README (https://github.com/mindattic/MindAttic.Vault) is the project page. The mindattic.com/mindatticvault.htm catalog landing page was retired (MindAttic.Deploy DEP-A6); do not run MindAttic.Deploy.
 ---
 
-When invoked, run:
+# /deploy -- no web deploy
 
-```
-powershell -NoProfile -ExecutionPolicy Bypass -Command "cd D:\Projects\MindAttic\MindAttic.Deploy; npm run deploy -- --only mindatticvault"
-```
+**MindAttic.Vault has no web deploy.** Its README on GitHub -- https://github.com/mindattic/MindAttic.Vault -- is the project page. To update the project page, edit `README.md` and push to `main`.
 
-Report the result and flag any failures.
+The README-driven landing page `mindattic.com/mindatticvault.htm` was retired together with MindAttic.Deploy's catalog mode (amendment DEP-A6 in `MindAttic.Deploy/docs/AMENDMENTS.md`, 2026-10-03). `npm run deploy -- --only mindatticvault` is now rejected, so do not run MindAttic.Deploy for this project.
 
-Notes:
-- Catalog entry: `MindAttic.Deploy/projects.json` -> `projects[]` slug `mindatticvault` (theme: Cyberspace).
-- Credentials (single source of truth): `%APPDATA%\MindAttic\Deploy\ftp.json` (canonical Vault bucket) or `MINDATTIC_FTP_JSON` env in CI; transitional fallback `MindAttic.Deploy/secrets/ftp.json` (gitignored). No User Secrets — retired family-wide.
-- The legacy `scripts/cli/deploy.{bat,ps1}` + `build-html.js` + `deploy.settings.json[.template]` in this repo are dead code -- do not invoke them.
+When invoked, tell the user the above and stop.
