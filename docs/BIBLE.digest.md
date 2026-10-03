@@ -5,7 +5,7 @@ code: VLT
 layer: digest
 status: generated
 generatedFrom: VLT-§1,VLT-§3,VLT-§5,VLT-§9
-updated: 2026-09-04
+updated: 2026-10-03
 ---
 
 # MindAttic.Vault — BIBLE digest
@@ -23,13 +23,13 @@ between environments.
   network. It is a *resolution and projection* layer over sources the host already owns.
 - **NOT an Azure SDK wrapper.** The core package has zero Azure-only dependencies. Key Vault is
   reached by registering `AddAzureKeyVault(...)` upstream of Vault, not by Vault calling Azure.
-- **NOT a User-Secrets replacement that ranks above disk.** User Secrets is retired family-wide
-  (see [VLT-LAW-3](#VLT-LAW-3)); the writable APPDATA store is the single local home so a stale
-  CLI value can never mask a freshly-rotated key.
+- **NOT a User Secrets source.** MindAttic projects do not use User Secrets (see
+  [VLT-LAW-3](#VLT-LAW-3)); the writable APPDATA store is the single local home so a stale CLI
+  value can never mask a freshly-rotated key.
 - **NOT a runtime secret writer in production.** `ConfigurationCredentialStore` throws on writes;
   production deploys never mutate secrets at runtime.
 - **NOT a UI.** It is a class library with no DOM. The companion `MindAttic.Vault.Dashboard`
-  (see [VLT-§7](#VLT-§7)) is a separate, in-flight app, not part of the published package.
+  (see [VLT-§7](#VLT-§7)) is a separate, in-progress app, not part of the published package.
 
 ## The Laws
 This bible **inherits the org-wide House Rules** at
@@ -52,10 +52,10 @@ The single on-disk invariant: a bucket's folder under `%APPDATA%\MindAttic\` **e
 section's final segment (`MindAttic:Vault:<Bucket>`). Each file is a faithful image of its config
 subtree. Never split one credential across two stores.
 
-### {#VLT-LAW-3} VLT-LAW-3 — APPDATA is the single local source of truth; User Secrets is retired
+### {#VLT-LAW-3} VLT-LAW-3 — APPDATA is the single local source of truth; no User Secrets
 The writable `%APPDATA%\MindAttic\<Bucket>\` store is the one local home for every credential. Do
 **not** add `AddUserSecrets(...)` or `<UserSecretsId>` to any MindAttic project — User Secrets
-ranked above the writable store and could silently mask a freshly-rotated key. Production stays
+ranks above the writable store and could silently mask a freshly-rotated key. Production stays
 env vars / App Service Application Settings / Key Vault. (Sharpens
 [HOUSE-LAW-3](../../MindAttic.HouseRules.md#HOUSE-LAW-3).)
 
@@ -71,18 +71,30 @@ appear only in the separate Dashboard app, never in the library.
 ### {#VLT-LAW-6} VLT-LAW-6 — Atomic writes, never touch real %APPDATA% in tests
 File stores write atomically (temp + swap, `.bak` retained) and tolerate malformed/empty input by
 falling back to defaults. Tests redirect every path via env vars
-(`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`) or
-temp directories — no test ever reads or writes the developer's real `%APPDATA%`.
+(`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`,
+`MINDATTIC_FTP_CREDENTIALS`) or temp directories — no test ever reads or writes the developer's
+real `%APPDATA%`.
+
+### {#VLT-LAW-7} VLT-LAW-7 — Root resolution never throws
+`VaultPaths` always returns a rooted, non-blank root via the chain in [VLT-§4](#VLT-§4). Vault sits
+in the `IConfiguration` chain, so a throw there aborts host construction (e.g. on a Linux App
+Service worker) before any application code runs. An explicit override env var always wins, and a
+host that resolves through `Environment.SpecialFolder` never resolves anywhere else. Every
+environment dependency is injectable so each platform branch is tested from any OS.
 
 ## Glossary
 - **Bucket** — credential category; folder == `MindAttic:Vault:<Bucket>`. Canonical set:
-  - `LLM` — `providers.json`: `{ id: { type, apiKey, model, maxTokens } }`.
+  - `LLM` — `providers.json`: `{ id: { type, apiKey, apiKeys?, model, maxTokens } }`.
   - `Brokers` — `providers.json`: `{ id: { type, apiKey, secret, baseUrl } }`.
   - `Tokens` — `tokens.json`: flat `{ github: "...", "nuget-org": "..." }`.
   - `Subtitles` — `providers.json`: `{ OpenSubtitles: { user, password } }`.
-  - `Notifications` — `providers.json`: `{ twilio:{...}, email:{...}, to, toEmail }`.
+  - `Notifications` — `providers.json`: `{ email: { smtpHost, smtpPort, username, password, from }, toEmail }`.
   - `AudioStore` — `providers.json`: `{ provider, container, connectionString }`.
+  - `Ftp` — `ftp.json`: one flat FTP(S) record; file-only, read by `FtpCredentialStore`, not
+    projected into `IConfiguration`.
 - **Provider** — a keyed entry in a bucket (`claude`, `alpaca-paper`, …).
+- **App-scoped id** — `{appId}-{provider}` (e.g. `tutor-claude`), written by `AppScopedCredentialStore`.
+- **Key pool** — the ordered keys for one provider (`IRotatingKeyStore`); entry 0 mirrors `apiKey`.
 - **Resolver** — a `CompositeCredentialStore` chaining config → file (e.g. `LlmCredentialResolver`).
 - **Source** — an `IConfigurationSource`/store in the read chain.
 - **Roaming vs local** — roaming settings live in `%APPDATA%`; per-machine caches/data in
@@ -91,7 +103,4 @@ temp directories — no test ever reads or writes the developer's real `%APPDATA
   `deepseek`) whose votes decide the overall confidence verdict.
 
 ## Status index (from USER_STORIES.md)
-- done: 22 | partial: 1 | planned: 7 | cut: 1
-
-## Latest amendment
-- VLT-A3 — Root resolution is cross-platform and never throws (supersedes —)
+- done: 23 | partial: 1 | planned: 6

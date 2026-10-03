@@ -2,7 +2,7 @@ namespace MindAttic.Vault.Configuration;
 
 /// <summary>
 /// Single source of truth for the section names every cloud-native source
-/// (appsettings.json, User Secrets, App Service Application Settings,
+/// (appsettings.json, the APPDATA files, App Service Application Settings,
 /// Azure Key Vault) must use to surface MindAttic credentials.
 ///
 /// <para><b>Schema:</b></para>
@@ -21,9 +21,8 @@ namespace MindAttic.Vault.Configuration;
 ///     Subtitles:
 ///       OpenSubtitles: { user, password }
 ///     Notifications:
-///       twilio: { accountSid, authToken, from }
 ///       email:  { smtpHost, smtpPort, username, password, from }
-///       to:     "+1..."
+///       toEmail: "5555550101@vtext.com"
 ///     AudioStore: { provider, container, connectionString }
 /// </code>
 ///

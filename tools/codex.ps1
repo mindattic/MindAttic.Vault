@@ -8,7 +8,7 @@
               JSON-schema data, done-story test tokens, cited code paths, stale generatedFrom
               artifacts) and regenerate the digest to detect drift. Non-zero exit on any hard error.
     digest  - regenerate docs/BIBLE.digest.md from BIBLE.md (sections 1, 3, 5, 9) + a status
-              index + the latest amendment head.
+              index + any pending decision heads from AMENDMENTS.md (omitted when there are none).
 
   This file is intentionally pure ASCII so Windows PowerShell 5.1 (which assumes the ANSI code
   page for BOM-less scripts) parses it identically to pwsh. Any non-ASCII character it needs
@@ -113,18 +113,17 @@ function Invoke-Digest {
         $nCut     = ([regex]::Matches($s, [regex]::Escape($CUT))).Count
     }
 
-    # latest amendment head (last "## VLT-A.." heading)
-    $amendHead = ''
+    # pending decision heads ("## VLT-A.." headings in AMENDMENTS.md; normally none)
+    $pending = @()
     if (Test-Path -LiteralPath $AmendPath) {
         $a = Get-DocText $AmendPath
         $am = [regex]::Matches($a, '(?m)^##\s+(VLT-A\d+[^\n]*)$')
-        if ($am.Count -gt 0) { $amendHead = $am[$am.Count - 1].Groups[1].Value.Trim() }
+        foreach ($m in $am) { $pending += ('- ' + $m.Groups[1].Value.Trim()) }
     }
 
     $today = (Get-Date).ToString('yyyy-MM-dd')
     $genFrom = 'VLT-' + $SECT + '1,VLT-' + $SECT + '3,VLT-' + $SECT + '5,VLT-' + $SECT + '9'
-    $statusLine = "- done: $nDone | partial: $nPartial | planned: $nPlanned | cut: $nCut"
-    $amendLine  = if ($amendHead) { "- $amendHead" } else { '- (none)' }
+    $statusLine = "- done: $nDone | partial: $nPartial | planned: $nPlanned"
     $emDash = [char]0x2014
 
     $lines = @(
@@ -155,10 +154,8 @@ function Invoke-Digest {
         ''
         '## Status index (from USER_STORIES.md)'
         $statusLine
-        ''
-        '## Latest amendment'
-        $amendLine
     )
+    if ($pending.Count -gt 0) { $lines += @('', '## Pending decisions') + $pending }
     Set-DocText $DigestPath (($lines -join "`r`n") + "`r`n")
     Write-Host "digest -> $DigestPath"
 }

@@ -253,7 +253,7 @@ FtpCredentialStore.Default.Set(new FtpCredentialStore.FtpCreds(
 </tr>
 </tbody></table>
 <h3 id="canonical-buckets">Canonical buckets</h3>
-<p>User Secrets is retired (<a href="docs/AMENDMENTS.md">VLT-A1</a>). It duplicated the writable APPDATA store and, because <code>AddUserSecrets</code> ranks above <code>AddMindAtticVaultFiles</code>, a stale value could silently mask a freshly rotated key on disk. Do not add <code>AddUserSecrets(...)</code> or <code>&lt;UserSecretsId&gt;</code> to MindAttic projects. Production stays on environment variables and Key Vault.</p>
+<p>MindAttic projects do not use User Secrets (<a href="docs/BIBLE.md#VLT-LAW-3">VLT-LAW-3</a>). It would duplicate the writable APPDATA store and, because <code>AddUserSecrets</code> ranks above <code>AddMindAtticVaultFiles</code>, a stale value could silently mask a freshly rotated key on disk. Do not add <code>AddUserSecrets(...)</code> or <code>&lt;UserSecretsId&gt;</code> to MindAttic projects. Production stays on environment variables and Key Vault.</p>
 <p>The on-disk layout follows one invariant: folder name equals config section equals <code>MindAttic:Vault:&lt;Bucket&gt;</code>, and each file is a faithful image of its config subtree.</p>
 <table><thead><tr>
 <th>Bucket folder</th>
@@ -283,7 +283,7 @@ FtpCredentialStore.Default.Set(new FtpCredentialStore.FtpCreds(
 <tr>
 <td><code>Notifications</code></td>
 <td><code>providers.json</code></td>
-<td><code>{ twilio:{...}, email:{...}, to:"...", toEmail:"..." }</code></td>
+<td><code>{ email:{ smtpHost, smtpPort, username, password, from }, toEmail:"..." }</code></td>
 </tr>
 <tr>
 <td><code>AudioStore</code></td>
@@ -491,7 +491,7 @@ VaultPaths.LocalRoot;                    // %LOCALAPPDATA%\MindAttic
 VaultPaths.RoamingBucket("LLM");         // %APPDATA%\MindAttic\LLM
 VaultPaths.LocalApp("Prose");            // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p</code></pre>
-<p>Override either root for tests with <code>MINDATTIC_VAULT_ROAMING_ROOT</code> or <code>MINDATTIC_VAULT_LOCAL_ROOT</code>. On non-Windows hosts the same properties resolve through the standard <code>Environment.SpecialFolder</code> lookup (for example <code>~/.config/MindAttic</code>), and root resolution never throws (<a href="docs/AMENDMENTS.md">VLT-A3</a>).</p>
+<p>Override either root for tests with <code>MINDATTIC_VAULT_ROAMING_ROOT</code> or <code>MINDATTIC_VAULT_LOCAL_ROOT</code>. On non-Windows hosts the same properties resolve through the standard <code>Environment.SpecialFolder</code> lookup (for example <code>~/.config/MindAttic</code>), and root resolution never throws (<a href="docs/BIBLE.md#VLT-LAW-7">VLT-LAW-7</a>).</p>
 <h3 id="environmentoverlay">EnvironmentOverlay</h3>
 <p>Namespace <code>MindAttic.Vault.Paths</code>.</p>
 <pre><code class="language-csharp">EnvironmentOverlay.Apply("MY_KEY", v =&gt; settings.Key = v);
@@ -547,70 +547,8 @@ public static class ProviderCredentials
     public AppSettings Update(Action&lt;AppSettings&gt; mutate) =&gt; store.Update(mutate);
 }</code></pre>
 <p>Reach for the resolvers instead when the host is a web or worker app with a real <code>IConfiguration</code>.</p>
-<h3 id="integration-plans">Integration plans</h3>
-<p>The <a href="IntegrationPlans">IntegrationPlans</a> folder records the original diff-level rollout to the first wave of consumers. It is historical: those plans wired <code>AddUserSecrets</code> into each consumer, and User Secrets has since been retired family-wide, so ignore those steps. Every plan ends with a rollback section.</p>
-<table><thead><tr>
-<th>Order</th>
-<th>Project</th>
-<th>Plan</th>
-<th>Outcome</th>
-</tr></thead><tbody>
-<tr>
-<td>1</td>
-<td>MindAttic.Legion</td>
-<td><a href="IntegrationPlans/MindAttic.Legion.md">MindAttic.Legion.md</a></td>
-<td>Done. Legion 2.1.0 published to nuget.org on Vault.</td>
-</tr>
-<tr>
-<td>2</td>
-<td>FractionsOfACent</td>
-<td><a href="IntegrationPlans/FractionsOfACent.md">FractionsOfACent.md</a></td>
-<td>Done. GitHub token provider in place.</td>
-</tr>
-<tr>
-<td>3</td>
-<td>ThinkTank</td>
-<td><a href="IntegrationPlans/ThinkTank.md">ThinkTank.md</a></td>
-<td>Done. Vault overlay layered on the settings factory.</td>
-</tr>
-<tr>
-<td>4</td>
-<td>Tutor</td>
-<td><a href="IntegrationPlans/Tutor.md">Tutor.md</a></td>
-<td>Done. Forward-looking DI wiring.</td>
-</tr>
-<tr>
-<td>5</td>
-<td>IdiotProof</td>
-<td><a href="IntegrationPlans/IdiotProof.md">IdiotProof.md</a></td>
-<td>Done. Duplicate broker store deleted.</td>
-</tr>
-<tr>
-<td>6</td>
-<td>Prose</td>
-<td><a href="IntegrationPlans/Prose.md">Prose.md</a></td>
-<td>Done. API key resolution consults Vault first.</td>
-</tr>
-<tr>
-<td>7</td>
-<td>TaxRateCollector</td>
-<td><a href="IntegrationPlans/TaxRateCollector.md">TaxRateCollector.md</a></td>
-<td>Done. Configuration injection plus save-leak protection.</td>
-</tr>
-<tr>
-<td>8</td>
-<td>GridGame2026</td>
-<td><a href="IntegrationPlans/GridGame2026.md">GridGame2026.md</a></td>
-<td>Skipped. Unity, no credentials.</td>
-</tr>
-<tr>
-<td>9</td>
-<td>MindAttic.Deploy</td>
-<td><a href="IntegrationPlans/MindAttic.Deploy.md">MindAttic.Deploy.md</a></td>
-<td>Done. New <code>FtpCredentialStore</code> bridged to the Node pipeline.</td>
-</tr>
-</tbody></table>
-<p>A plan for <a href="IntegrationPlans/MindAttic.Mobile.md">MindAttic.Mobile</a> is also in the folder.</p>
+<h3 id="consumers">Consumers</h3>
+<p>Workspace projects that reference the package today (pinned version in brackets): Automata (5.0.0), Tutor (5.0.0), JobHunt (5.0.0), MindAttic.Legion (5.0.0), IdiotProof (4.0.0), MediaButler (4.0.0), Prose (4.0.0), TaxRateCollector (4.0.0), ThinkTank (4.0.0), MindAttic.Ideas (3.0.0), MindAttic.Deploy (2.0.0), MindAttic.Authentication (1.0.0), MindAttic.Launcher (1.0.0), MindAttic.Psst (1.0.0) and OpenCredentials (1.0.0). MindAttic.Mobile references the project source directly.</p>
 <h2 id="llm-health-dashboard">LLM health dashboard</h2>
 <p><code>MindAttic.Vault.Dashboard</code> is a standalone Blazor Server app (<code>net10.0</code>) that answers a question Vault itself cannot: are the LLM keys still good? A key can be revoked, run out of quota, or point at a deprecated model. The dashboard probes every keyed provider on a schedule and renders a traffic-light health view.</p>
 <p>It is in progress (see <a href="docs/rfc/0001-llm-health-dashboard.md">RFC 0001</a> and Epic D in the <a href="docs/USER_STORIES.md">user stories</a>). It is not in <code>MindAttic.Vault.slnx</code>, has no dedicated test project, is not built by the normal <code>dotnet build</code> and <code>dotnet test</code> commands, and is never part of the published package.</p>
@@ -645,13 +583,12 @@ dotnet run
 │   ├── Components/                  Razor pages and layout (Home.razor is the dashboard)
 │   └── Services/                    Monitor, store, background service, self-healer, alerts, models
 ├── MindAttic.Vault.slnx             Solution: MindAttic.Vault + MindAttic.Vault.Tests only
-├── IntegrationPlans/                Historical per-consumer rollout plans
 ├── docs/                            Codex documentation (BIBLE, AMENDMENTS, USER_STORIES, rfc, digest)
 ├── tools/
 │   ├── codex.ps1                    Codex CLI: doctor (validate docs) and digest (regenerate)
 │   └── build-readme.ps1             Regenerates README.htm from this file
 ├── nuget.config                     Package sources: local family feed + nuget.org
-├── package.json, index.htm          Separate toolchain for the retired landing page; unrelated to the package
+├── package.json, index.htm          Node README-to-HTML renderer; index.htm is not deployed and is unrelated to the package
 └── LICENSE                          MIT</code></pre>
 <h2 id="testing">Testing</h2>
 <p>The NUnit suite covers every public type, including argument validation, malformed-input handling, atomic writes and the full cloud-native flow:</p>
@@ -688,12 +625,12 @@ dotnet pack MindAttic.Vault\MindAttic.Vault.csproj -c Release -o C:\LocalNuGet
 # Validate the docs/ Codex canon
 powershell -File tools\codex.ps1 doctor
 
-# Regenerate docs/BIBLE.digest.md after editing the bible or adding an amendment
+# Regenerate docs/BIBLE.digest.md after editing the bible
 powershell -File tools\codex.ps1 digest</code></pre>
 <ul>
 <li>Target frameworks: <code>net9.0</code> and <code>net10.0</code>, multi-targeted so consumers on either get a matching build.</li>
 <li>Dependencies: <code>Microsoft.Extensions.Configuration</code>, <code>Configuration.Abstractions</code>, <code>Configuration.Binder</code>, <code>DependencyInjection.Abstractions</code>, <code>Logging.Abstractions</code> and <code>Options</code>, all pinned at 9.0.0 for cross-framework compatibility.</li>
-<li>Versioning: whole-number, major-only (<code>4.0.0</code> to <code>5.0.0</code>, never <code>5.1.0</code>). The csproj <code>&lt;Version&gt;</code> is authoritative over any prose (<a href="docs/AMENDMENTS.md">VLT-A2</a>).</li>
+<li>Versioning: whole-number, major-only (<code>4.0.0</code> to <code>5.0.0</code>, never <code>5.1.0</code>). The csproj <code>&lt;Version&gt;</code> is authoritative over any prose (<a href="docs/BIBLE.md#VLT-§4">VLT-§4</a>).</li>
 <li>Release: bump the version whenever the public surface changes, keep <code>dotnet test</code> green, pack, then update each consumer's package reference when that consumer next needs it.</li>
 <li>nuget.org currently lists only early 0.x versions of the package; current versions are packed to the local family feed.</li>
 </ul>
@@ -722,7 +659,7 @@ powershell -File tools\codex.ps1 digest</code></pre>
 <p>This repo follows the MindAttic Codex documentation standard: a fact lives in exactly one layer, and other layers link to it by stable ID.</p>
 <ul>
 <li><a href="docs/BIBLE.md">docs/BIBLE.md</a>: what Vault is and is not, architecture, the Laws (VLT-LAW ids), verified state, glossary.</li>
-<li><a href="docs/AMENDMENTS.md">docs/AMENDMENTS.md</a>: append-only change log; an amendment wins over the bible.</li>
+<li><a href="docs/AMENDMENTS.md">docs/AMENDMENTS.md</a>: pending decisions not yet folded into the bible (normally empty).</li>
 <li><a href="docs/USER_STORIES.md">User stories</a>: each completed one citing the NUnit test that proves it.</li>
 <li><a href="docs/rfc">docs/rfc</a>: design notes for in-flight work, currently the dashboard RFC.</li>
 <li><a href="docs/BIBLE.digest.md">docs/BIBLE.digest.md</a>: generated by <code>tools/codex.ps1 digest</code>; never hand-edit.</li>

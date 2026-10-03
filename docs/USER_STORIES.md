@@ -4,13 +4,13 @@ project: MindAttic.Vault
 code: VLT
 layer: stories
 status: living
-updated: 2026-06-07
+updated: 2026-10-03
 ---
 
 # MindAttic.Vault — User Stories
-> ✅ done (shipped & tested) · 🟡 partial · ⬜ planned · 🗑️ cut. Every ✅ cites the test that proves it.
+> ✅ done (shipped & tested) · 🟡 partial · ⬜ planned. Every ✅ cites the test that proves it.
 > "Consumer" = a .NET host that takes a dependency on the package (Program.cs author / service author).
-> Verified 2026-06-07: `dotnet test MindAttic.Vault.slnx` → Failed: 0, Passed: 241, Total: 241 (exit 0).
+> Verified 2026-10-03: `dotnet test MindAttic.Vault.slnx` → Failed: 0, Passed: 292, Total: 292 (exit 0).
 
 ## Epic A — Local credential resolution
 
@@ -79,24 +79,11 @@ updated: 2026-06-07
   source + env overlay, in DI) is exercised end-to-end. *(verified by the
   `CloudNativeIntegrationTests` fixture.)*
 
-## Epic D — LLM Health Dashboard (frontier)
-
-- **VLT-US-D1 ⬜** As an operator, I can open a dashboard that probes every keyed LLM provider in
-  the Vault and shows a traffic-light health status per provider. *(In-flight on
-  `feat/llm-health-dashboard`; the Dashboard app is not in the solution or test tree — unproven.
-  See [RFC 0001](rfc/0001-llm-health-dashboard.md).)*
-- **VLT-US-D2 ⬜** As an operator, a trusted panel (`claude`, `openai`, `gemini`, `deepseek`) gates
-  an overall confidence verdict. *(Live-auth test `TrustedPanel_EveryKeyAuthenticatesLive` is
-  **skipped** — requires real keys/network; not run in CI.)*
-- **VLT-US-D3 ⬜** As an operator, I get an alert (email/webhook) when a provider changes state
-  between sweeps, and deprecated-model pointers optionally self-heal within the sweep interval.
-  *(Planned; `SelfHealer`/`AlertDispatcher` services exist in the working tree, untested here.)*
-
 - **VLT-US-C7 ✅** As an app author, Vault resolves its roots on **any** OS — Windows, Linux, macOS,
   iOS, Android — and never aborts my host at startup because the platform has no user profile.
   *`VaultPaths` walks an ordered chain (override → `SpecialFolder` → platform convention → `$HOME` →
   application base) and reports which rule won via `ResolveRoaming()`/`ResolveLocal()`/`Describe()`.
-  See [VLT-A3](AMENDMENTS.md).* *(tests: `VaultPathsResolutionTests.Override_WinsAndIsUsedVerbatim`,
+  See [VLT-LAW-7](BIBLE.md#VLT-LAW-7).* *(verified by `VaultPathsResolutionTests.Override_WinsAndIsUsedVerbatim`,
   `BlankOverride_IsTreatedAsUnset`, `SpecialFolder_IsPreferredWhenTheHostProvidesOne`,
   `SpecialFolder_ThatThrows_FallsThroughInsteadOfPropagating`, `Windows_FallsBackToAppDataVariables`,
   `Linux_UsesXdgWhenSet`, `Linux_FallsBackToTheXdgDefaultsUnderHome`,
@@ -104,23 +91,41 @@ updated: 2026-06-07
   `NoUserProfileAtAll_ResolvesBesideTheBinariesInsteadOfThrowing`,
   `EveryBranchReturnsARootedNonBlankPath`, `PublicRootsResolveOnThisHostAndAreReportable` —
   every environment dependency is injected, so the Linux-container branch is covered from a Windows
-  agent. 265 tests green.)*
+  agent.)*
+- **VLT-US-C8 ✅** As an app author, I can keep my own key for a provider in the shared keyring and
+  fall back to the cross-app default, without ever changing what another app resolves. *Given
+  `Composite(AppScopedCredentialStore("automata", shared), shared)`, When I read `claude`, Then
+  `automata-claude` wins if set, else `claude`; writes land only under `automata-`.* *(verified by
+  `Composite_Of_Scoped_Then_Shared_Prefers_Own_Key`,
+  `Composite_Of_Scoped_Then_Shared_Falls_Back_When_No_Own_Key`,
+  `Composite_Write_Lands_In_Scoped_Store_Not_Shared`,
+  `SaveAllRaw_Replaces_Only_Own_Entries_Leaving_Others_Untouched`.)*
+- **VLT-US-C9 ✅** As an app author, I can store an ordered pool of keys for one provider and rotate
+  through it, while single-key callers keep working. *(verified by
+  `SetKeys_Then_GetKeys_Round_Trips_Multiple_Keys_In_Order`,
+  `SetKeys_Mirrors_First_Entry_Into_Plain_ApiKey_For_Back_Compat`,
+  `SetKeys_With_Single_Entry_Omits_ApiKeys_Array_On_Disk`,
+  `CompositeCredentialStore_SetKeys_Writes_To_Writable_Store`.)*
+- **VLT-US-C10 ✅** As a deploy tool author, I can read and write the shared FTP(S) deploy record in
+  MindAttic.Deploy's existing field shape. *(verified by `Get_Reads_All_Fields_From_Legacy_Shape`,
+  `Set_Persists_All_Fields_And_Round_Trips`,
+  `TryGetJson_Matches_Legacy_Field_Names_For_MINDATTIC_FTP_JSON`.)*
+
+## Epic D — LLM Health Dashboard (frontier)
+
+- **VLT-US-D1 ⬜** As an operator, I can open a dashboard that probes every keyed LLM provider in
+  the Vault and shows a traffic-light health status per provider. *(The Dashboard app exists in the repo but is not in the solution or test tree — unproven.
+  See [RFC 0001](rfc/0001-llm-health-dashboard.md).)*
+- **VLT-US-D2 ⬜** As an operator, a trusted panel (`claude`, `openai`, `gemini`, `deepseek`) gates
+  an overall confidence verdict. *(Live-auth test `TrustedPanel_EveryKeyAuthenticatesLive` is
+  `[Explicit]` — requires real keys/network; not run by a normal `dotnet test`.)*
+- **VLT-US-D3 ⬜** As an operator, I get an alert (email/webhook) when a provider changes state
+  between sweeps, and deprecated-model pointers optionally self-heal within the sweep interval.
+  *(`SelfHealer`/`AlertDispatcher` services exist in the Dashboard, untested here.)*
 
 ## Priority backlog
-Dependency-ordered toward "publish 1.0.0 and ship the health dashboard":
-1. **VLT-US-X1 ✅** Reconcile README status prose (stale "0.3.0") with the authoritative
-   `<Version>1.0.0</Version>` in the csproj ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)).
-   *(Resolved 2026-06-07: README Status row and Integration plans status line updated to `1.0.0`.)*
-2. **VLT-US-X2 ⬜** Publish `MindAttic.Vault 1.0.0` to nuget.org (README's pending release step).
-3. **VLT-US-D1 → D2 → D3 ⬜** Land the LLM Health Dashboard: add the project to the solution, add a
+Dependency-ordered toward "publish to nuget.org and ship the health dashboard":
+1. **VLT-US-X2 ⬜** Publish the current `MindAttic.Vault` to nuget.org (nuget.org lists only early
+   0.x versions).
+2. **VLT-US-D1 → D2 → D3 ⬜** Land the LLM Health Dashboard: add the project to the solution, add a
    test project for the monitor/self-healer, then promote D1–D3 to ✅ with named tests.
-
-### Audit log
-No story spec was changed; each entry below records a status promotion only.
-
-- **2026-06-07 — VLT-US-X1 ⬜→✅** README Status row updated from "0.3.0" to "1.0.0"; Integration
-  plans status line updated to `MindAttic.Vault 1.0.0`. Original spec: *Reconcile README status
-  prose (stale "0.3.0") with the authoritative `<Version>1.0.0</Version>` in the csproj.*
-
-Prior to 2026-06-07: this file was the first Codex stories file for the repo; migration source was
-`README.md` (the de-facto bible) plus the real NUnit suite — no prior `user_stories.md` existed.

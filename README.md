@@ -151,7 +151,7 @@ How that schema appears in each source:
 
 ### Canonical buckets
 
-User Secrets is retired ([VLT-A1](docs/AMENDMENTS.md)). It duplicated the writable APPDATA store and, because `AddUserSecrets` ranks above `AddMindAtticVaultFiles`, a stale value could silently mask a freshly rotated key on disk. Do not add `AddUserSecrets(...)` or `<UserSecretsId>` to MindAttic projects. Production stays on environment variables and Key Vault.
+MindAttic projects do not use User Secrets ([VLT-LAW-3](docs/BIBLE.md#VLT-LAW-3)). It would duplicate the writable APPDATA store and, because `AddUserSecrets` ranks above `AddMindAtticVaultFiles`, a stale value could silently mask a freshly rotated key on disk. Do not add `AddUserSecrets(...)` or `<UserSecretsId>` to MindAttic projects. Production stays on environment variables and Key Vault.
 
 The on-disk layout follows one invariant: folder name equals config section equals `MindAttic:Vault:<Bucket>`, and each file is a faithful image of its config subtree.
 
@@ -161,7 +161,7 @@ The on-disk layout follows one invariant: folder name equals config section equa
 | `Brokers` | `providers.json` | `{ id: { type, apiKey, secret, baseUrl } }` |
 | `Tokens` | `tokens.json` | `{ github: "...", "nuget-org": "..." }` (flat) |
 | `Subtitles` | `providers.json` | `{ OpenSubtitles: { user, password } }` |
-| `Notifications` | `providers.json` | `{ twilio:{...}, email:{...}, to:"...", toEmail:"..." }` |
+| `Notifications` | `providers.json` | `{ email:{ smtpHost, smtpPort, username, password, from }, toEmail:"..." }` |
 | `AudioStore` | `providers.json` | `{ provider, container, connectionString }` |
 | `Ftp` | `ftp.json` | `{ host, port, user, password, secure, servername }` (flat, single record) |
 
@@ -403,7 +403,7 @@ VaultPaths.LocalApp("Prose");            // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p
 ```
 
-Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` or `MINDATTIC_VAULT_LOCAL_ROOT`. On non-Windows hosts the same properties resolve through the standard `Environment.SpecialFolder` lookup (for example `~/.config/MindAttic`), and root resolution never throws ([VLT-A3](docs/AMENDMENTS.md)).
+Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` or `MINDATTIC_VAULT_LOCAL_ROOT`. On non-Windows hosts the same properties resolve through the standard `Environment.SpecialFolder` lookup (for example `~/.config/MindAttic`), and root resolution never throws ([VLT-LAW-7](docs/BIBLE.md#VLT-LAW-7)).
 
 ### EnvironmentOverlay
 
@@ -487,23 +487,9 @@ public sealed class SettingsStore
 
 Reach for the resolvers instead when the host is a web or worker app with a real `IConfiguration`.
 
-### Integration plans
+### Consumers
 
-The [IntegrationPlans](IntegrationPlans) folder records the original diff-level rollout to the first wave of consumers. It is historical: those plans wired `AddUserSecrets` into each consumer, and User Secrets has since been retired family-wide, so ignore those steps. Every plan ends with a rollback section.
-
-| Order | Project | Plan | Outcome |
-| --- | --- | --- | --- |
-| 1 | MindAttic.Legion | [MindAttic.Legion.md](IntegrationPlans/MindAttic.Legion.md) | Done. Legion 2.1.0 published to nuget.org on Vault. |
-| 2 | FractionsOfACent | [FractionsOfACent.md](IntegrationPlans/FractionsOfACent.md) | Done. GitHub token provider in place. |
-| 3 | ThinkTank | [ThinkTank.md](IntegrationPlans/ThinkTank.md) | Done. Vault overlay layered on the settings factory. |
-| 4 | Tutor | [Tutor.md](IntegrationPlans/Tutor.md) | Done. Forward-looking DI wiring. |
-| 5 | IdiotProof | [IdiotProof.md](IntegrationPlans/IdiotProof.md) | Done. Duplicate broker store deleted. |
-| 6 | Prose | [Prose.md](IntegrationPlans/Prose.md) | Done. API key resolution consults Vault first. |
-| 7 | TaxRateCollector | [TaxRateCollector.md](IntegrationPlans/TaxRateCollector.md) | Done. Configuration injection plus save-leak protection. |
-| 8 | GridGame2026 | [GridGame2026.md](IntegrationPlans/GridGame2026.md) | Skipped. Unity, no credentials. |
-| 9 | MindAttic.Deploy | [MindAttic.Deploy.md](IntegrationPlans/MindAttic.Deploy.md) | Done. New `FtpCredentialStore` bridged to the Node pipeline. |
-
-A plan for [MindAttic.Mobile](IntegrationPlans/MindAttic.Mobile.md) is also in the folder.
+Workspace projects that reference the package today (pinned version in brackets): Automata (5.0.0), Tutor (5.0.0), JobHunt (5.0.0), MindAttic.Legion (5.0.0), IdiotProof (4.0.0), MediaButler (4.0.0), Prose (4.0.0), TaxRateCollector (4.0.0), ThinkTank (4.0.0), MindAttic.Ideas (3.0.0), MindAttic.Deploy (2.0.0), MindAttic.Authentication (1.0.0), MindAttic.Launcher (1.0.0), MindAttic.Psst (1.0.0) and OpenCredentials (1.0.0). MindAttic.Mobile references the project source directly.
 
 ## LLM health dashboard
 
@@ -551,13 +537,12 @@ MindAttic.Vault/                     (repo root)
 │   ├── Components/                  Razor pages and layout (Home.razor is the dashboard)
 │   └── Services/                    Monitor, store, background service, self-healer, alerts, models
 ├── MindAttic.Vault.slnx             Solution: MindAttic.Vault + MindAttic.Vault.Tests only
-├── IntegrationPlans/                Historical per-consumer rollout plans
 ├── docs/                            Codex documentation (BIBLE, AMENDMENTS, USER_STORIES, rfc, digest)
 ├── tools/
 │   ├── codex.ps1                    Codex CLI: doctor (validate docs) and digest (regenerate)
 │   └── build-readme.ps1             Regenerates README.htm from this file
 ├── nuget.config                     Package sources: local family feed + nuget.org
-├── package.json, index.htm          Separate toolchain for the retired landing page; unrelated to the package
+├── package.json, index.htm          Node README-to-HTML renderer; index.htm is not deployed and is unrelated to the package
 └── LICENSE                          MIT
 ```
 
@@ -605,13 +590,13 @@ dotnet pack MindAttic.Vault\MindAttic.Vault.csproj -c Release -o C:\LocalNuGet
 # Validate the docs/ Codex canon
 powershell -File tools\codex.ps1 doctor
 
-# Regenerate docs/BIBLE.digest.md after editing the bible or adding an amendment
+# Regenerate docs/BIBLE.digest.md after editing the bible
 powershell -File tools\codex.ps1 digest
 ```
 
 - Target frameworks: `net9.0` and `net10.0`, multi-targeted so consumers on either get a matching build.
 - Dependencies: `Microsoft.Extensions.Configuration`, `Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions` and `Options`, all pinned at 9.0.0 for cross-framework compatibility.
-- Versioning: whole-number, major-only (`4.0.0` to `5.0.0`, never `5.1.0`). The csproj `<Version>` is authoritative over any prose ([VLT-A2](docs/AMENDMENTS.md)).
+- Versioning: whole-number, major-only (`4.0.0` to `5.0.0`, never `5.1.0`). The csproj `<Version>` is authoritative over any prose ([VLT-§4](docs/BIBLE.md#VLT-§4)).
 - Release: bump the version whenever the public surface changes, keep `dotnet test` green, pack, then update each consumer's package reference when that consumer next needs it.
 - nuget.org currently lists only early 0.x versions of the package; current versions are packed to the local family feed.
 
@@ -642,7 +627,7 @@ The authoritative glossary and domain model are in [docs/BIBLE.md](docs/BIBLE.md
 This repo follows the MindAttic Codex documentation standard: a fact lives in exactly one layer, and other layers link to it by stable ID.
 
 - [docs/BIBLE.md](docs/BIBLE.md): what Vault is and is not, architecture, the Laws (VLT-LAW ids), verified state, glossary.
-- [docs/AMENDMENTS.md](docs/AMENDMENTS.md): append-only change log; an amendment wins over the bible.
+- [docs/AMENDMENTS.md](docs/AMENDMENTS.md): pending decisions not yet folded into the bible (normally empty).
 - [User stories](docs/USER_STORIES.md): each completed one citing the NUnit test that proves it.
 - [docs/rfc](docs/rfc): design notes for in-flight work, currently the dashboard RFC.
 - [docs/BIBLE.digest.md](docs/BIBLE.digest.md): generated by `tools/codex.ps1 digest`; never hand-edit.

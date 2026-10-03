@@ -3,8 +3,8 @@ codex: 1
 project: MindAttic.Vault
 code: VLT
 layer: rfc
-status: planned
-updated: 2026-06-07
+status: partial
+updated: 2026-10-03
 ---
 
 # RFC 0001 — LLM Health Dashboard
@@ -20,14 +20,14 @@ repair of the common "deprecated model id" failure.
 2. **Fold monitoring into the Vault library** — violates [VLT-LAW-5](../BIBLE.md#VLT-LAW-5) (would
    drag Azure/HTTP/Legion deps into the core package) and [VLT-§3](../BIBLE.md#VLT-§3) (Vault is not
    a UI). Rejected.
-3. **Separate Blazor app (`MindAttic.Vault.Dashboard`)** that references the local Vault project
+3. **Separate Blazor app (`MindAttic.Vault.Dashboard`)** that references the Vault package
    for credential resolution and `MindAttic.Legion` for probing/diagnosis/model discovery, with a
    scheduled background sweep, traffic-light UI, and pluggable alert channels. **Chosen.**
 
 ## Decision
 Ship a standalone `MindAttic.Vault.Dashboard` (`net10.0`, `Sdk.Web`) that:
 - resolves keys via the Vault resolvers (no new credential code);
-- probes each keyed provider through Legion 3.0.0 (`LlmHealthMonitor`), classifying into
+- probes each keyed provider through Legion (`22.0.0`) (`LlmHealthMonitor`), classifying into
   Healthy/Degraded/Down with an `LlmHealthDiagnosis`;
 - runs a `MonitorBackgroundService` on a configurable interval (default hourly);
 - gates an overall verdict on a *trusted panel* (`claude`, `openai`, `gemini`, `deepseek`);
@@ -43,7 +43,7 @@ Ship a standalone `MindAttic.Vault.Dashboard` (`net10.0`, `Sdk.Web`) that:
   `TrustedPanel_EveryKeyAuthenticatesLive` — it is skipped in CI and proves nothing offline.
 
 ## Phased plan (with risk)
-1. **Project skeleton** (done in working tree, `feat/llm-health-dashboard`): Blazor app, services
+1. **Project skeleton** (in the repo at `MindAttic.Vault.Dashboard/`): Blazor app, services
    (`LlmHealthMonitor`, `HealthMonitorStore`, `MonitorBackgroundService`, `SelfHealer`,
    `AlertDispatcher`), Home page. *Risk: not in the solution → no CI coverage.*
 2. **Add to solution + test project** — wire into `MindAttic.Vault.slnx`; add a

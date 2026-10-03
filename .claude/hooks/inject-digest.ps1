@@ -17,7 +17,7 @@ if ([string]::IsNullOrWhiteSpace($digest)) { Write-Output '{}'; exit 0 }
 $preamble = @'
 [MindAttic Codex] The following is the AUTHORITATIVE project digest for MindAttic.Vault (CODE: VLT),
 generated from docs/BIBLE.md. Treat it as the source of truth for what this project IS, is NOT, and
-its Laws. Full detail lives in docs/BIBLE.md; amendments in docs/AMENDMENTS.md win over the bible.
+its Laws. Full detail lives in docs/BIBLE.md.
 Do not contradict it; if a change is needed, amend the bible rather than working around it.
 
 '@
