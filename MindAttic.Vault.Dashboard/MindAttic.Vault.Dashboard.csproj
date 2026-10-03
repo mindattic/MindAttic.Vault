@@ -9,13 +9,18 @@
 
   <ItemGroup>
     <!-- Probe + diagnosis + live model discovery - reused, not reinvented. -->
-    <PackageReference Include="MindAttic.Legion" Version="22.0.0" />
-    <!-- Credential resolution via the published Vault package. -->
-    <PackageReference Include="MindAttic.Vault" Version="1.0.0" />
+    <!-- 26.0.0 is the Legion release built against Vault 5.0.0 (the library in this repo). -->
+    <PackageReference Include="MindAttic.Legion" Version="26.0.0" />
 
     <!-- Azure Key Vault as a configuration source (managed identity in App Service). -->
     <PackageReference Include="Azure.Identity" Version="1.13.1" />
     <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Credential resolution via the Vault library in this repo, so the dashboard always
+         builds against the current source rather than a pinned package. -->
+    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
   </ItemGroup>
 
 </Project>

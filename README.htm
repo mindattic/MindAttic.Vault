@@ -553,7 +553,7 @@ public static class ProviderCredentials
 <p><code>MindAttic.Vault.Dashboard</code> is a standalone Blazor Server app (<code>net10.0</code>) that answers a question Vault itself cannot: are the LLM keys still good? A key can be revoked, run out of quota, or point at a deprecated model. The dashboard probes every keyed provider on a schedule and renders a traffic-light health view.</p>
 <p>It is in progress (see <a href="docs/rfc/0001-llm-health-dashboard.md">RFC 0001</a> and Epic D in the <a href="docs/USER_STORIES.md">user stories</a>). It is not in <code>MindAttic.Vault.slnx</code>, has no dedicated test project, is not built by the normal <code>dotnet build</code> and <code>dotnet test</code> commands, and is never part of the published package.</p>
 <ul>
-<li>Dependencies: <code>MindAttic.Vault 1.0.0</code>, <code>MindAttic.Legion 22.0.0</code> (probing, diagnosis, live model discovery), <code>Azure.Identity</code> and <code>Azure.Extensions.AspNetCore.Configuration.Secrets</code>. It is the only place in this repo the Azure packages appear.</li>
+<li>Dependencies: the <code>MindAttic.Vault</code> library in this repo (a project reference, so the dashboard always builds against the current source), <code>MindAttic.Legion 26.0.0</code> (probing, diagnosis, live model discovery), <code>Azure.Identity</code> and <code>Azure.Extensions.AspNetCore.Configuration.Secrets</code>. It is the only place in this repo the Azure packages appear.</li>
 <li>Credentials: reads <code>AddMindAtticVaultFiles()</code> and environment variables, and adds Key Vault through managed identity when <code>MindAttic:Vault:KeyVaultUri</code> is set.</li>
 <li>Statuses: <code>Unknown</code>, <code>Healthy</code> (green), <code>Degraded</code> (amber: authenticated but drifted, or self-healed this sweep), <code>Down</code> (red: unreachable, key rejected, quota, or deprecated model).</li>
 <li>Options (<code>Monitor</code> config section): sweep <code>Interval</code> (default hourly), <code>ProbeTimeout</code> (default 30 seconds), <code>TrustedProviders</code> (<code>claude</code>, <code>openai</code>, <code>gemini</code>, <code>deepseek</code>), <code>MonitorAllKeyed</code>, <code>SelfHealModels</code>, and webhook or email alert targets.</li>
@@ -588,7 +588,6 @@ dotnet run
 │   ├── codex.ps1                    Codex CLI: doctor (validate docs) and digest (regenerate)
 │   └── build-readme.ps1             Regenerates README.htm from this file
 ├── nuget.config                     Package sources: local family feed + nuget.org
-├── package.json, index.htm          Node README-to-HTML renderer; index.htm is not deployed and is unrelated to the package
 └── LICENSE                          MIT</code></pre>
 <h2 id="testing">Testing</h2>
 <p>The NUnit suite covers every public type, including argument validation, malformed-input handling, atomic writes and the full cloud-native flow:</p>

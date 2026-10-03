@@ -84,7 +84,8 @@ short-circuits.
   authoritative version; prose never overrides it.
 - **`MindAttic.Vault.Tests`** — NUnit suite (`net10.0`), `InternalsVisibleTo` target. Not packable.
 - **`MindAttic.Vault.Dashboard`** — Blazor LLM-health-monitor app (`net10.0`, Sdk.Web), references
-  the published `MindAttic.Vault 1.0.0` and `MindAttic.Legion 22.0.0` packages plus the Azure Key
+  the `MindAttic.Vault` library in this repo by project reference (guarded by
+  `DashboardProjectReferenceTests`), the `MindAttic.Legion 26.0.0` package and the Azure Key
   Vault configuration packages. **NOT in `MindAttic.Vault.slnx`; no test project; NOT part of the
   package.** See [VLT-§7](#VLT-§7) and [RFC 0001](rfc/0001-llm-health-dashboard.md).
 

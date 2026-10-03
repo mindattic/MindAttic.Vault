@@ -497,7 +497,7 @@ Workspace projects that reference the package today (pinned version in brackets)
 
 It is in progress (see [RFC 0001](docs/rfc/0001-llm-health-dashboard.md) and Epic D in the [user stories](docs/USER_STORIES.md)). It is not in `MindAttic.Vault.slnx`, has no dedicated test project, is not built by the normal `dotnet build` and `dotnet test` commands, and is never part of the published package.
 
-- Dependencies: `MindAttic.Vault 1.0.0`, `MindAttic.Legion 22.0.0` (probing, diagnosis, live model discovery), `Azure.Identity` and `Azure.Extensions.AspNetCore.Configuration.Secrets`. It is the only place in this repo the Azure packages appear.
+- Dependencies: the `MindAttic.Vault` library in this repo (a project reference, so the dashboard always builds against the current source), `MindAttic.Legion 26.0.0` (probing, diagnosis, live model discovery), `Azure.Identity` and `Azure.Extensions.AspNetCore.Configuration.Secrets`. It is the only place in this repo the Azure packages appear.
 - Credentials: reads `AddMindAtticVaultFiles()` and environment variables, and adds Key Vault through managed identity when `MindAttic:Vault:KeyVaultUri` is set.
 - Statuses: `Unknown`, `Healthy` (green), `Degraded` (amber: authenticated but drifted, or self-healed this sweep), `Down` (red: unreachable, key rejected, quota, or deprecated model).
 - Options (`Monitor` config section): sweep `Interval` (default hourly), `ProbeTimeout` (default 30 seconds), `TrustedProviders` (`claude`, `openai`, `gemini`, `deepseek`), `MonitorAllKeyed`, `SelfHealModels`, and webhook or email alert targets.
@@ -542,7 +542,6 @@ MindAttic.Vault/                     (repo root)
 │   ├── codex.ps1                    Codex CLI: doctor (validate docs) and digest (regenerate)
 │   └── build-readme.ps1             Regenerates README.htm from this file
 ├── nuget.config                     Package sources: local family feed + nuget.org
-├── package.json, index.htm          Node README-to-HTML renderer; index.htm is not deployed and is unrelated to the package
 └── LICENSE                          MIT
 ```
 

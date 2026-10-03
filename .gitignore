@@ -8,9 +8,5 @@ obj/
 *.nupkg
 TestResults/
 
-# Landing-page renderer (README -> index.htm) -- credentials and Node deps
-scripts/cli/deploy.settings.json
-node_modules/
-package-lock.json
 .claude/quicksave.md
 artifacts/
