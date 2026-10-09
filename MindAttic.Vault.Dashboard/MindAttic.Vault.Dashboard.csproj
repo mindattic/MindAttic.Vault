@@ -11,6 +11,7 @@
     <!-- Probe + diagnosis + live model discovery - reused, not reinvented. -->
     <!-- 26.0.0 is the Legion release built against Vault 5.0.0 (the library in this repo). -->
     <PackageReference Include="MindAttic.Legion" Version="26.0.0" />
+    <PackageReference Include="MindAttic.Log" Version="1.0.0" />
 
     <!-- Azure Key Vault as a configuration source (managed identity in App Service). -->
     <PackageReference Include="Azure.Identity" Version="1.13.1" />

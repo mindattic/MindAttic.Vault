@@ -1,8 +1,11 @@
 using Azure.Identity;
 using MindAttic.Legion;
+using MindAttic.Log;
+using MindAttic.Log.Extensions;
 using MindAttic.Vault.Configuration;
 using MindAttic.Vault.Dashboard.Components;
 using MindAttic.Vault.Dashboard.Services;
+using MindAttic.Vault.Paths;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +29,16 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 MindAtticCredentialStore.UseConfiguration(builder.Configuration);
 
 // ── Services ─────────────────────────────────────────────────────────────────
+// No database of its own — rolled-SQLite no-database tier (see MindAttic.Log repo's
+// docs/MIGRATION.md). HealthMonitorStore/SelfHealer/AlertDispatcher/MonitorBackgroundService
+// already call ILogger<T>; this only adds the sink underneath, no call-site changes.
+builder.Services.AddMindAtticLog(o =>
+{
+    o.Application = "MindAttic.Vault.Dashboard";
+    o.Destination = LogDestination.Sqlite;
+    o.FileDirectory = VaultPaths.Ensure(Path.Combine(VaultPaths.LocalApp("VaultDashboard"), "logs"));
+});
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
