@@ -5,7 +5,7 @@ code: VLT
 layer: digest
 status: generated
 generatedFrom: VLT-§1,VLT-§3,VLT-§5,VLT-§9
-updated: 2026-10-03
+updated: 2026-10-12
 ---
 
 # MindAttic.Vault — BIBLE digest
