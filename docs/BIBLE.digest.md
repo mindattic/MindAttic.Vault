@@ -5,7 +5,7 @@ code: VLT
 layer: digest
 status: generated
 generatedFrom: VLT-§1,VLT-§3,VLT-§5,VLT-§9
-updated: 2026-10-12
+updated: 2026-10-15
 ---
 
 # MindAttic.Vault — BIBLE digest
@@ -92,9 +92,12 @@ environment dependency is injectable so each platform branch is tested from any 
   - `AudioStore` — `providers.json`: `{ provider, container, connectionString }`.
   - `Ftp` — `ftp.json`: one flat FTP(S) record; file-only, read by `FtpCredentialStore`, not
     projected into `IConfiguration`.
-  - `Logging` — **not a credential bucket**: `%APPDATA%\MindAttic\Logging\<appId>\MindAttic.Log.db`,
-    resolved via `VaultPaths.LoggingDbPath(appId)`. No `providers.json`, no `IConfiguration`
-    projection — see MindAttic.Log's `docs/BIBLE.md` §4.
+  - `Logging` — **not a credential bucket**: a plain roaming-root folder
+    (`%APPDATA%\MindAttic\Logging\<appId>\MindAttic.Log.db`), one subfolder per app, resolved only
+    via `VaultPaths.LoggingDbPath(appId)`. No `providers.json`, no `IConfiguration` projection,
+    nothing to encrypt — it exists so every app's standalone MindAttic.Log database lives under the
+    shared Vault root instead of each app inventing its own location. See MindAttic.Log's own
+    `docs/BIBLE.md` §4 for the sink that writes there.
 - **Provider** — a keyed entry in a bucket (`claude`, `alpaca-paper`, …).
 - **App-scoped id** — `{appId}-{provider}` (e.g. `tutor-claude`), written by `AppScopedCredentialStore`.
 - **Key pool** — the ordered keys for one provider (`IRotatingKeyStore`); entry 0 mirrors `apiKey`.
