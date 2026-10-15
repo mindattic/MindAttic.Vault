@@ -7,7 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MindAttic.Vault</AssemblyName>
     <!-- Whole-number versioning: major-only bumps (1.0.0 → 2.0.0 → 3.0.0). Minor/patch stay 0. -->
-    <Version>5.0.0</Version>
+    <!-- 6.0.0: additive public-surface change — VaultPaths.LoggingDbPath/LoggingBucket, the
+         resolver MindAttic.Log 3.0.0 consumers use to find their standalone MindAttic.Log.db. -->
+    <Version>6.0.0</Version>
     <PackageId>MindAttic.Vault</PackageId>
     <Title>MindAttic.Vault</Title>
     <Authors>MindAttic</Authors>

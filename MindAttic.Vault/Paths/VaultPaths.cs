@@ -229,6 +229,29 @@ public static class VaultPaths
         return Path.Combine(LocalRoot, app);
     }
 
+    /// <summary>Folder name of the <c>Logging</c> bucket — the roaming home for every app's
+    /// standalone <c>MindAttic.Log.db</c> (see <see cref="LoggingDbPath"/>). A path convention,
+    /// not a credential store: nothing under it is a secret, so there is no
+    /// <c>ICredentialStore</c> for it, only this helper.</summary>
+    public const string LoggingBucket = "Logging";
+
+    /// <summary>
+    /// Absolute path to <paramref name="appId"/>'s standalone log database, e.g.
+    /// <c>%APPDATA%\MindAttic\Logging\Prose\MindAttic.Log.db</c>. Deliberately under the
+    /// <b>roaming</b> root (via <see cref="RoamingBucket"/>), not <see cref="LocalApp"/>'s
+    /// <c>%LocalAppData%</c> root — so clearing an app's local cache/data folder can never take its
+    /// logs with it. Does not create the directory; callers that write through this path create it
+    /// themselves (see <c>MindAtticSqliteSink</c>).
+    /// </summary>
+    /// <param name="appId">App identifier, e.g. <c>"Prose"</c>. Required.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="appId"/> is null/whitespace.</exception>
+    public static string LoggingDbPath(string appId)
+    {
+        if (string.IsNullOrWhiteSpace(appId))
+            throw new ArgumentException("App id is required.", nameof(appId));
+        return Path.Combine(RoamingBucket(LoggingBucket), appId, "MindAttic.Log.db");
+    }
+
     /// <summary>Ensures a directory exists, returning the supplied path for fluent chaining.</summary>
     /// <param name="path">Directory path. Required.</param>
     /// <returns>The same <paramref name="path"/>, after the directory has been created if needed.</returns>

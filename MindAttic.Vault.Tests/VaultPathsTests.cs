@@ -91,6 +91,23 @@ public class VaultPathsTests
     }
 
     [Test]
+    public void LoggingDbPath_Combines_Roaming_Root_Bucket_App_And_FileName()
+    {
+        using var tmp = new TempDirectory();
+        Environment.SetEnvironmentVariable(VaultPaths.RoamingRootEnvVar, tmp.Path);
+        Assert.That(VaultPaths.LoggingDbPath("Prose"),
+            Is.EqualTo(Path.Combine(tmp.Path, "Logging", "Prose", "MindAttic.Log.db")));
+    }
+
+    [Test]
+    public void LoggingDbPath_Throws_For_Empty_AppId()
+    {
+        Assert.Throws<ArgumentException>(() => VaultPaths.LoggingDbPath(""));
+        Assert.Throws<ArgumentException>(() => VaultPaths.LoggingDbPath("   "));
+        Assert.Throws<ArgumentException>(() => VaultPaths.LoggingDbPath(null!));
+    }
+
+    [Test]
     public void Ensure_Throws_For_Empty_Path()
     {
         Assert.Throws<ArgumentException>(() => VaultPaths.Ensure(""));

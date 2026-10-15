@@ -141,7 +141,12 @@ short-circuits.
   5. `{AppContext.BaseDirectory}/.mindattic/{config,data}`.
 
   `ResolveRoaming()` / `ResolveLocal()` return the path and the `VaultRootSource` that produced
-  it; `Describe()` prints both for startup diagnostics.
+  it; `Describe()` prints both for startup diagnostics. `VaultPaths.LoggingDbPath(appId)` is a
+  second, narrower helper in the same spirit as `LocalApp`: it names where MindAttic.Log's
+  standalone `MindAttic.Log.db` lives for a given app (`%APPDATA%\MindAttic\Logging\<appId>\`,
+  deliberately roaming so a user clearing an app's local cache can't take its logs with it). Unlike
+  a credential bucket, `Logging` is not projected into `IConfiguration` and has no `providers.json`
+  — see [VLT-§9](#VLT-§9).
 - **`JsonSettingsStore<T>`** (`Settings/`) — *load/save/update* per-app JSON settings.
 
 ## 5. The Laws {#VLT-§5}
@@ -247,6 +252,12 @@ A change is **done** ([HOUSE-LAW-8](../../MindAttic.HouseRules.md#HOUSE-LAW-8)) 
   - `AudioStore` — `providers.json`: `{ provider, container, connectionString }`.
   - `Ftp` — `ftp.json`: one flat FTP(S) record; file-only, read by `FtpCredentialStore`, not
     projected into `IConfiguration`.
+  - `Logging` — **not a credential bucket**: a plain roaming-root folder
+    (`%APPDATA%\MindAttic\Logging\<appId>\MindAttic.Log.db`), one subfolder per app, resolved only
+    via `VaultPaths.LoggingDbPath(appId)`. No `providers.json`, no `IConfiguration` projection,
+    nothing to encrypt — it exists so every app's standalone MindAttic.Log database lives under the
+    shared Vault root instead of each app inventing its own location. See MindAttic.Log's own
+    `docs/BIBLE.md` §4 for the sink that writes there.
 - **Provider** — a keyed entry in a bucket (`claude`, `alpaca-paper`, …).
 - **App-scoped id** — `{appId}-{provider}` (e.g. `tutor-claude`), written by `AppScopedCredentialStore`.
 - **Key pool** — the ordered keys for one provider (`IRotatingKeyStore`); entry 0 mirrors `apiKey`.

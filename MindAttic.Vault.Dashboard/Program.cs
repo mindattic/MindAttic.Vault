@@ -1,7 +1,9 @@
 using Azure.Identity;
+using Microsoft.Data.Sqlite;
 using MindAttic.Legion;
 using MindAttic.Log;
 using MindAttic.Log.Extensions;
+using MindAttic.Log.Migration;
 using MindAttic.Vault.Configuration;
 using MindAttic.Vault.Dashboard.Components;
 using MindAttic.Vault.Dashboard.Services;
@@ -29,14 +31,31 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 MindAtticCredentialStore.UseConfiguration(builder.Configuration);
 
 // ── Services ─────────────────────────────────────────────────────────────────
-// No database of its own — rolled-SQLite no-database tier (see MindAttic.Log repo's
-// docs/MIGRATION.md). HealthMonitorStore/SelfHealer/AlertDispatcher/MonitorBackgroundService
-// already call ILogger<T>; this only adds the sink underneath, no call-site changes.
+// Phase 2 (MindAttic.Log 3.0.0, see its docs/BIBLE.md §1.1): standalone MindAttic.Log.db under
+// Vault's shared roaming root, not the rolled files Phase 1 kept under
+// %LocalAppData%\MindAttic\VaultDashboard\logs — superseded so clearing that local folder can no
+// longer take the log history with it. HealthMonitorStore/SelfHealer/AlertDispatcher/
+// MonitorBackgroundService already call ILogger<T>; no call-site changes.
+var vaultDashboardLogDbPath = VaultPaths.LoggingDbPath("VaultDashboard");
+
+// Carry forward any rows left in Phase 1's rolled MindAttic.Log.<yyyy-MM>.db files (LogFileRoller
+// is retired), then remove the now-empty rolled files. Idempotent and a clean no-op on every
+// later startup.
+var oldLogDirectory = Path.Combine(VaultPaths.LocalApp("VaultDashboard"), "logs");
+if (Directory.Exists(oldLogDirectory))
+{
+    foreach (var rolledFile in Directory.GetFiles(oldLogDirectory, "MindAttic.Log.*.db"))
+    {
+        await MindAtticLogMigrator.MigrateFromSqliteAsync(rolledFile, vaultDashboardLogDbPath, dropSource: true);
+        SqliteConnection.ClearAllPools();
+        try { File.Delete(rolledFile); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+}
+
 builder.Services.AddMindAtticLog(o =>
 {
     o.Application = "MindAttic.Vault.Dashboard";
-    o.Destination = LogDestination.Sqlite;
-    o.FileDirectory = VaultPaths.Ensure(Path.Combine(VaultPaths.LocalApp("VaultDashboard"), "logs"));
+    o.DbPath = vaultDashboardLogDbPath;
 });
 
 builder.Services.AddRazorComponents()

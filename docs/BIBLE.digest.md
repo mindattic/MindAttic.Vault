@@ -92,6 +92,9 @@ environment dependency is injectable so each platform branch is tested from any 
   - `AudioStore` — `providers.json`: `{ provider, container, connectionString }`.
   - `Ftp` — `ftp.json`: one flat FTP(S) record; file-only, read by `FtpCredentialStore`, not
     projected into `IConfiguration`.
+  - `Logging` — **not a credential bucket**: `%APPDATA%\MindAttic\Logging\<appId>\MindAttic.Log.db`,
+    resolved via `VaultPaths.LoggingDbPath(appId)`. No `providers.json`, no `IConfiguration`
+    projection — see MindAttic.Log's `docs/BIBLE.md` §4.
 - **Provider** — a keyed entry in a bucket (`claude`, `alpaca-paper`, …).
 - **App-scoped id** — `{appId}-{provider}` (e.g. `tutor-claude`), written by `AppScopedCredentialStore`.
 - **Key pool** — the ordered keys for one provider (`IRotatingKeyStore`); entry 0 mirrors `apiKey`.
