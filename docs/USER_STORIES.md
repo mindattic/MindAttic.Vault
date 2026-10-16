@@ -146,3 +146,4 @@ Dependency-ordered toward "publish to nuget.org and ship the health dashboard":
 | M.VALT-T6 | 2026-10-14 | chore | open | Run Vault.Dashboard once so its carry-forward migrates the leftover rolled log %LOCALAPPDATA%\MindAttic\VaultDashboard\logs\MindAttic.Log.2026-10.db (61 rows) into the Vault database | — |
 | M.VALT-T7 | 2026-10-15 | chore | closed | Remove duplicate command copies (/deploy, /quickload, /quicksave) now centralized at the user level (~/.claude/commands) | M.FLOW-T14 |
 | M.VALT-T8 | 2026-10-16 | chore | closed | Tracked .githooks/commit-msg runs the shared MindAttic commit rule: every commit names an existing workflow ticket | M.FLOW agent-standard commit hook |
+| M.VALT-T9 | 2026-10-16 | chore | closed | install.ps1 adds this repo's 8 .prose/commands stubs for the shared global commands, so any LLM client finds them | mindattic-agent-standard/install.ps1 run 2026-10-16 |
