@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Dashboard\MindAttic.Vault.Dashboard.csproj" />
   </ItemGroup>
 
 </Project>
