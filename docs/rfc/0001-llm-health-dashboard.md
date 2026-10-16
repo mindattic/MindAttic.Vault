@@ -1,7 +1,7 @@
 ---
 codex: 1
 project: MindAttic.Vault
-code: VLT
+code: M.VALT
 layer: rfc
 status: partial
 updated: 2026-10-03
@@ -17,8 +17,8 @@ repair of the common "deprecated model id" failure.
 
 ## Options compared
 1. **CLI one-shot probe** — simple, but no continuous monitoring, no UI, no alerting.
-2. **Fold monitoring into the Vault library** — violates [VLT-LAW-5](../BIBLE.md#VLT-LAW-5) (would
-   drag Azure/HTTP/Legion deps into the core package) and [VLT-§3](../BIBLE.md#VLT-§3) (Vault is not
+2. **Fold monitoring into the Vault library** — violates [M.VALT-LAW-5](../BIBLE.md#M.VALT-LAW-5) (would
+   drag Azure/HTTP/Legion deps into the core package) and [M.VALT-§3](../BIBLE.md#M.VALT-§3) (Vault is not
    a UI). Rejected.
 3. **Separate Blazor app (`MindAttic.Vault.Dashboard`)** that references the Vault package
    for credential resolution and `MindAttic.Legion` for probing/diagnosis/model discovery, with a
@@ -36,9 +36,9 @@ Ship a standalone `MindAttic.Vault.Dashboard` (`net10.0`, `Sdk.Web`) that:
 
 ## What NOT to do
 - Do **not** add the Dashboard or its Azure/Legion dependencies to the published `MindAttic.Vault`
-  package ([VLT-LAW-5](../BIBLE.md#VLT-LAW-5)).
+  package ([M.VALT-LAW-5](../BIBLE.md#M.VALT-LAW-5)).
 - Do **not** let the dashboard write secrets in production beyond the file fallback
-  ([VLT-LAW-4](../BIBLE.md#VLT-LAW-4)).
+  ([M.VALT-LAW-4](../BIBLE.md#M.VALT-LAW-4)).
 - Do **not** mark D-epic stories `✅` on the strength of the live-network test
   `TrustedPanel_EveryKeyAuthenticatesLive` — it is skipped in CI and proves nothing offline.
 
@@ -49,9 +49,9 @@ Ship a standalone `MindAttic.Vault.Dashboard` (`net10.0`, `Sdk.Web`) that:
 2. **Add to solution + test project** — wire into `MindAttic.Vault.slnx`; add a
    `MindAttic.Vault.Dashboard.Tests` exercising the monitor/diagnosis/self-heal logic with a faked
    Legion probe. *Risk: live-network temptation — keep all CI tests offline/faked.*
-3. **Promote stories** — turn [VLT-US-D1..D3](../USER_STORIES.md#epic-d-llm-health-dashboard-frontier)
-   to ✅ as each gains a named offline test; record the result in [VLT-§6](../BIBLE.md#VLT-§6).
+3. **Promote stories** — turn [M.VALT-US-D1..D3](../USER_STORIES.md#epic-d-llm-health-dashboard-frontier)
+   to ✅ as each gains a named offline test; record the result in [M.VALT-§6](../BIBLE.md#M.VALT-§6).
 
 ## Graduates into
-- BIBLE: [VLT-§4.1](../BIBLE.md#VLT-§4) (projects), [VLT-§7](../BIBLE.md#VLT-§7) (frontier → verified).
+- BIBLE: [M.VALT-§4.1](../BIBLE.md#M.VALT-§4) (projects), [M.VALT-§7](../BIBLE.md#M.VALT-§7) (frontier → verified).
 - Stories: [Epic D](../USER_STORIES.md#epic-d-llm-health-dashboard-frontier).

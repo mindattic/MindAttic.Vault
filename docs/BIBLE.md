@@ -1,7 +1,7 @@
 ---
 codex: 1
 project: MindAttic.Vault
-code: VLT
+code: M.VALT
 layer: bible
 status: living
 updated: 2026-10-03
@@ -11,14 +11,14 @@ updated: 2026-10-03
 > Single source of truth for what MindAttic.Vault IS, is NOT, and the rules that keep it coherent.
 > README.md says how to build/run and consume the package; this says how to think about the system.
 
-## 1. The one sentence {#VLT-§1}
+## 1. The one sentence {#M.VALT-§1}
 MindAttic.Vault is a cloud-native credentials-and-settings library for .NET that gives every
 MindAttic host **one `IConfiguration`-backed pipeline** for API keys, broker tokens, and per-app
 preferences — with the `%APPDATA%\MindAttic` file store as the single local source of truth and
 Azure App Service Application Settings / Key Vault as the production source, with no code change
 between environments.
 
-## 2. The product promise {#VLT-§2}
+## 2. The product promise {#M.VALT-§2}
 - **One schema, every source.** Secrets are defined once under `MindAttic:Vault` and resolve
   identically from the local APPDATA store, environment variables, App Service Application
   Settings, and Azure Key Vault.
@@ -37,20 +37,20 @@ between environments.
 - **Settings stay roaming, secrets stay cloud-native.** Per-app preferences roam via `%APPDATA%`;
   secrets follow the .NET cloud-native convention and live in `IConfiguration`.
 
-## 3. What it is NOT {#VLT-§3}
+## 3. What it is NOT {#M.VALT-§3}
 - **NOT a secrets manager / vault server.** It does not store, encrypt, or serve secrets over a
   network. It is a *resolution and projection* layer over sources the host already owns.
 - **NOT an Azure SDK wrapper.** The core package has zero Azure-only dependencies. Key Vault is
   reached by registering `AddAzureKeyVault(...)` upstream of Vault, not by Vault calling Azure.
 - **NOT a User Secrets source.** MindAttic projects do not use User Secrets (see
-  [VLT-LAW-3](#VLT-LAW-3)); the writable APPDATA store is the single local home so a stale CLI
+  [M.VALT-LAW-3](#M.VALT-LAW-3)); the writable APPDATA store is the single local home so a stale CLI
   value can never mask a freshly-rotated key.
 - **NOT a runtime secret writer in production.** `ConfigurationCredentialStore` throws on writes;
   production deploys never mutate secrets at runtime.
 - **NOT a UI.** It is a class library with no DOM. The companion `MindAttic.Vault.Dashboard`
-  (see [VLT-§7](#VLT-§7)) is a separate, in-progress app, not part of the published package.
+  (see [M.VALT-§7](#M.VALT-§7)) is a separate, in-progress app, not part of the published package.
 
-## 4. Architecture canon {#VLT-§4}
+## 4. Architecture canon {#M.VALT-§4}
 
 ```
                        consumer host (Program.cs)
@@ -87,12 +87,12 @@ short-circuits.
   the `MindAttic.Vault` library in this repo by project reference (guarded by
   `DashboardProjectReferenceTests`), the `MindAttic.Legion 26.0.0` package and the Azure Key
   Vault configuration packages. **NOT in `MindAttic.Vault.slnx`; no test project; NOT part of the
-  package.** See [VLT-§7](#VLT-§7) and [RFC 0001](rfc/0001-llm-health-dashboard.md).
+  package.** See [M.VALT-§7](#M.VALT-§7) and [RFC 0001](rfc/0001-llm-health-dashboard.md).
 
 ### 4.2 Domain model (NOUNS)
 - **Bucket** — a credential category whose folder name equals its config section
   (`MindAttic:Vault:<Bucket>`): `LLM`, `Brokers`, `Tokens`, `Subtitles`, `Notifications`,
-  `AudioStore`, plus the file-only `Ftp`. Cataloged in [VLT-§9](#VLT-§9).
+  `AudioStore`, plus the file-only `Ftp`. Cataloged in [M.VALT-§9](#M.VALT-§9).
 - **Provider** — a keyed entry inside a bucket (e.g. `claude`, `alpaca-paper`) holding a typed
   credential triplet/record. An app-scoped provider id is `{appId}-{provider}` (e.g.
   `automata-claude`).
@@ -131,7 +131,7 @@ short-circuits.
   (`DependencyInjection/`) — *register* the resolvers/stores in DI.
 - **`VaultPaths` / `EnvironmentOverlay`** (`Paths/`) — *compute* the roaming/local roots and
   *overlay* env vars onto settings. Root resolution is an ordered chain that never throws
-  ([VLT-LAW-7](#VLT-LAW-7)):
+  ([M.VALT-LAW-7](#M.VALT-LAW-7)):
   1. `MINDATTIC_VAULT_ROAMING_ROOT` / `MINDATTIC_VAULT_LOCAL_ROOT`, used verbatim;
   2. the matching `Environment.SpecialFolder` (the normal answer on Windows, macOS, iOS, Android);
   3. the platform convention from the environment — `%APPDATA%`/`%LOCALAPPDATA%` on Windows,
@@ -146,10 +146,10 @@ short-circuits.
   standalone `MindAttic.Log.db` lives for a given app (`%APPDATA%\MindAttic\Logging\<appId>\`,
   deliberately roaming so a user clearing an app's local cache can't take its logs with it). Unlike
   a credential bucket, `Logging` is not projected into `IConfiguration` and has no `providers.json`
-  — see [VLT-§9](#VLT-§9).
+  — see [M.VALT-§9](#M.VALT-§9).
 - **`JsonSettingsStore<T>`** (`Settings/`) — *load/save/update* per-app JSON settings.
 
-## 5. The Laws {#VLT-§5}
+## 5. The Laws {#M.VALT-§5}
 This bible **inherits the org-wide House Rules** at
 [`../../MindAttic.HouseRules.md`](../../MindAttic.HouseRules.md) by reference — they are not restated
 here. The directly load-bearing ones for Vault: whole-number versioning
@@ -160,47 +160,47 @@ here. The directly load-bearing ones for Vault: whole-number versioning
 
 Project-specific laws below:
 
-### {#VLT-LAW-1} VLT-LAW-1 — One schema, every source
+### {#M.VALT-LAW-1} M.VALT-LAW-1 — One schema, every source
 Every source surfaces the identical shape under `MindAttic:Vault`. Section names are constants in
 `VaultConfigurationKeys` — never hard-code the strings. The same wiring resolves keys on a laptop,
 on App Service, and via Key Vault with no code change.
 
-### {#VLT-LAW-2} VLT-LAW-2 — Folder name == config section
+### {#M.VALT-LAW-2} M.VALT-LAW-2 — Folder name == config section
 The single on-disk invariant: a bucket's folder under `%APPDATA%\MindAttic\` **equals** its config
 section's final segment (`MindAttic:Vault:<Bucket>`). Each file is a faithful image of its config
 subtree. Never split one credential across two stores.
 
-### {#VLT-LAW-3} VLT-LAW-3 — APPDATA is the single local source of truth; no User Secrets
+### {#M.VALT-LAW-3} M.VALT-LAW-3 — APPDATA is the single local source of truth; no User Secrets
 The writable `%APPDATA%\MindAttic\<Bucket>\` store is the one local home for every credential. Do
 **not** add `AddUserSecrets(...)` or `<UserSecretsId>` to any MindAttic project — User Secrets
 ranks above the writable store and could silently mask a freshly-rotated key. Production stays
 env vars / App Service Application Settings / Key Vault. (Sharpens
 [HOUSE-LAW-3](../../MindAttic.HouseRules.md#HOUSE-LAW-3).)
 
-### {#VLT-LAW-4} VLT-LAW-4 — Read-only in production
+### {#M.VALT-LAW-4} M.VALT-LAW-4 — Read-only in production
 `ConfigurationCredentialStore` throws `NotSupportedException` on writes. Composite resolvers route
 writes to the file fallback only — appropriate for a dev laptop, never for a production deploy.
 
-### {#VLT-LAW-5} VLT-LAW-5 — No Azure SDK in the core package
+### {#M.VALT-LAW-5} M.VALT-LAW-5 — No Azure SDK in the core package
 The published `MindAttic.Vault` has zero Azure-only dependencies. Key Vault / AWS / GCP are reached
 by registering their `IConfigurationSource` upstream of `AddMindAtticVault(...)`. Azure packages
 appear only in the separate Dashboard app, never in the library.
 
-### {#VLT-LAW-6} VLT-LAW-6 — Atomic writes, never touch real %APPDATA% in tests
+### {#M.VALT-LAW-6} M.VALT-LAW-6 — Atomic writes, never touch real %APPDATA% in tests
 File stores write atomically (temp + swap, `.bak` retained) and tolerate malformed/empty input by
 falling back to defaults. Tests redirect every path via env vars
 (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`,
 `MINDATTIC_FTP_CREDENTIALS`) or temp directories — no test ever reads or writes the developer's
 real `%APPDATA%`.
 
-### {#VLT-LAW-7} VLT-LAW-7 — Root resolution never throws
-`VaultPaths` always returns a rooted, non-blank root via the chain in [VLT-§4](#VLT-§4). Vault sits
+### {#M.VALT-LAW-7} M.VALT-LAW-7 — Root resolution never throws
+`VaultPaths` always returns a rooted, non-blank root via the chain in [M.VALT-§4](#M.VALT-§4). Vault sits
 in the `IConfiguration` chain, so a throw there aborts host construction (e.g. on a Linux App
 Service worker) before any application code runs. An explicit override env var always wins, and a
 host that resolves through `Environment.SpecialFolder` never resolves anywhere else. Every
 environment dependency is injectable so each platform branch is tested from any OS.
 
-## 6. Verified state {#VLT-§6}
+## 6. Verified state {#M.VALT-§6}
 Evidence captured 2026-10-03 on `main`.
 
 - **Build:** `dotnet build MindAttic.Vault.slnx` → clean for both `net9.0` and `net10.0`. ✅
@@ -218,9 +218,9 @@ Evidence captured 2026-10-03 on `main`.
   ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)). Packed to the local family feed;
   nuget.org lists only early 0.x versions. ✅
 - **Dashboard:** tracked in the repo, **not built by the solution and not covered by the test
-  suite** — its status is unproven here. ⬜ (See [VLT-§7](#VLT-§7).)
+  suite** — its status is unproven here. ⬜ (See [M.VALT-§7](#M.VALT-§7).)
 
-## 7. Active frontier {#VLT-§7}
+## 7. Active frontier {#M.VALT-§7}
 - **LLM Health Dashboard** (`MindAttic.Vault.Dashboard/`) — a Blazor app that probes every keyed
   LLM provider in the Vault on a schedule, renders traffic-light health, alerts on state change,
   and optionally self-heals deprecated-model pointers. Tracked in
@@ -228,21 +228,21 @@ Evidence captured 2026-10-03 on `main`.
   [Epic D](USER_STORIES.md#epic-d-llm-health-dashboard-frontier). Not yet in
   the solution or test tree.
 - **nuget.org publish** — current versions are not yet on nuget.org
-  (VLT-US-X2 in [USER_STORIES](USER_STORIES.md#priority-backlog)).
+  (M.VALT-US-X2 in [USER_STORIES](USER_STORIES.md#priority-backlog)).
 
-## 8. Quality bar {#VLT-§8}
+## 8. Quality bar {#M.VALT-§8}
 A change is **done** ([HOUSE-LAW-8](../../MindAttic.HouseRules.md#HOUSE-LAW-8)) only when:
 1. `dotnet build MindAttic.Vault.slnx` is clean for **both** `net9.0` and `net10.0`.
 2. `dotnet test MindAttic.Vault.slnx` is green (live-network tests may be skipped, never failing).
 3. Any new public type ships XML doc comments (the package emits `MindAttic.Vault.xml`).
-4. New credentials/buckets honor [VLT-LAW-2](#VLT-LAW-2) (folder == section) and have a store/
-   source projection test that redirects `%APPDATA%` ([VLT-LAW-6](#VLT-LAW-6)).
+4. New credentials/buckets honor [M.VALT-LAW-2](#M.VALT-LAW-2) (folder == section) and have a store/
+   source projection test that redirects `%APPDATA%` ([M.VALT-LAW-6](#M.VALT-LAW-6)).
 5. A public-surface change bumps the major version in the csproj
    ([HOUSE-LAW-1](../../MindAttic.HouseRules.md#HOUSE-LAW-1)).
 6. The user story carrying the change is `✅` only with its verifying test named in
    [USER_STORIES](USER_STORIES.md).
 
-## 9. Glossary {#VLT-§9}
+## 9. Glossary {#M.VALT-§9}
 - **Bucket** — credential category; folder == `MindAttic:Vault:<Bucket>`. Canonical set:
   - `LLM` — `providers.json`: `{ id: { type, apiKey, apiKeys?, model, maxTokens } }`.
   - `Brokers` — `providers.json`: `{ id: { type, apiKey, secret, baseUrl } }`.

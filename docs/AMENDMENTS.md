@@ -1,7 +1,7 @@
 ---
 codex: 1
 project: MindAttic.Vault
-code: VLT
+code: M.VALT
 layer: amendments
 status: living
 updated: 2026-10-03

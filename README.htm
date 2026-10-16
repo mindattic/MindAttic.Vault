@@ -253,7 +253,7 @@ FtpCredentialStore.Default.Set(new FtpCredentialStore.FtpCreds(
 </tr>
 </tbody></table>
 <h3 id="canonical-buckets">Canonical buckets</h3>
-<p>MindAttic projects do not use User Secrets (<a href="docs/BIBLE.md#VLT-LAW-3">VLT-LAW-3</a>). It would duplicate the writable APPDATA store and, because <code>AddUserSecrets</code> ranks above <code>AddMindAtticVaultFiles</code>, a stale value could silently mask a freshly rotated key on disk. Do not add <code>AddUserSecrets(...)</code> or <code>&lt;UserSecretsId&gt;</code> to MindAttic projects. Production stays on environment variables and Key Vault.</p>
+<p>MindAttic projects do not use User Secrets (<a href="docs/BIBLE.md#M.VALT-LAW-3">M.VALT-LAW-3</a>). It would duplicate the writable APPDATA store and, because <code>AddUserSecrets</code> ranks above <code>AddMindAtticVaultFiles</code>, a stale value could silently mask a freshly rotated key on disk. Do not add <code>AddUserSecrets(...)</code> or <code>&lt;UserSecretsId&gt;</code> to MindAttic projects. Production stays on environment variables and Key Vault.</p>
 <p>The on-disk layout follows one invariant: folder name equals config section equals <code>MindAttic:Vault:&lt;Bucket&gt;</code>, and each file is a faithful image of its config subtree.</p>
 <table><thead><tr>
 <th>Bucket folder</th>
@@ -491,7 +491,7 @@ VaultPaths.LocalRoot;                    // %LOCALAPPDATA%\MindAttic
 VaultPaths.RoamingBucket("LLM");         // %APPDATA%\MindAttic\LLM
 VaultPaths.LocalApp("Prose");            // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p</code></pre>
-<p>Override either root for tests with <code>MINDATTIC_VAULT_ROAMING_ROOT</code> or <code>MINDATTIC_VAULT_LOCAL_ROOT</code>. On non-Windows hosts the same properties resolve through the standard <code>Environment.SpecialFolder</code> lookup (for example <code>~/.config/MindAttic</code>), and root resolution never throws (<a href="docs/BIBLE.md#VLT-LAW-7">VLT-LAW-7</a>).</p>
+<p>Override either root for tests with <code>MINDATTIC_VAULT_ROAMING_ROOT</code> or <code>MINDATTIC_VAULT_LOCAL_ROOT</code>. On non-Windows hosts the same properties resolve through the standard <code>Environment.SpecialFolder</code> lookup (for example <code>~/.config/MindAttic</code>), and root resolution never throws (<a href="docs/BIBLE.md#M.VALT-LAW-7">M.VALT-LAW-7</a>).</p>
 <h3 id="environmentoverlay">EnvironmentOverlay</h3>
 <p>Namespace <code>MindAttic.Vault.Paths</code>.</p>
 <pre><code class="language-csharp">EnvironmentOverlay.Apply("MY_KEY", v =&gt; settings.Key = v);
@@ -629,7 +629,7 @@ powershell -File tools\codex.ps1 digest</code></pre>
 <ul>
 <li>Target frameworks: <code>net9.0</code> and <code>net10.0</code>, multi-targeted so consumers on either get a matching build.</li>
 <li>Dependencies: <code>Microsoft.Extensions.Configuration</code>, <code>Configuration.Abstractions</code>, <code>Configuration.Binder</code>, <code>DependencyInjection.Abstractions</code>, <code>Logging.Abstractions</code> and <code>Options</code>, all pinned at 9.0.0 for cross-framework compatibility.</li>
-<li>Versioning: whole-number, major-only (<code>4.0.0</code> to <code>5.0.0</code>, never <code>5.1.0</code>). The csproj <code>&lt;Version&gt;</code> is authoritative over any prose (<a href="docs/BIBLE.md#VLT-§4">VLT-§4</a>).</li>
+<li>Versioning: whole-number, major-only (<code>4.0.0</code> to <code>5.0.0</code>, never <code>5.1.0</code>). The csproj <code>&lt;Version&gt;</code> is authoritative over any prose (<a href="docs/BIBLE.md#M.VALT-§4">M.VALT-§4</a>).</li>
 <li>Release: bump the version whenever the public surface changes, keep <code>dotnet test</code> green, pack, then update each consumer's package reference when that consumer next needs it.</li>
 <li>nuget.org currently lists only early 0.x versions of the package; current versions are packed to the local family feed.</li>
 </ul>
@@ -657,7 +657,7 @@ powershell -File tools\codex.ps1 digest</code></pre>
 <h2 id="documentation">Documentation</h2>
 <p>This repo follows the MindAttic Codex documentation standard: a fact lives in exactly one layer, and other layers link to it by stable ID.</p>
 <ul>
-<li><a href="docs/BIBLE.md">docs/BIBLE.md</a>: what Vault is and is not, architecture, the Laws (VLT-LAW ids), verified state, glossary.</li>
+<li><a href="docs/BIBLE.md">docs/BIBLE.md</a>: what Vault is and is not, architecture, the Laws (M.VALT-LAW ids), verified state, glossary.</li>
 <li><a href="docs/AMENDMENTS.md">docs/AMENDMENTS.md</a>: pending decisions not yet folded into the bible (normally empty).</li>
 <li><a href="docs/USER_STORIES.md">User stories</a>: each completed one citing the NUnit test that proves it.</li>
 <li><a href="docs/rfc">docs/rfc</a>: design notes for in-flight work, currently the dashboard RFC.</li>

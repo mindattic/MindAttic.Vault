@@ -151,7 +151,7 @@ How that schema appears in each source:
 
 ### Canonical buckets
 
-MindAttic projects do not use User Secrets ([VLT-LAW-3](docs/BIBLE.md#VLT-LAW-3)). It would duplicate the writable APPDATA store and, because `AddUserSecrets` ranks above `AddMindAtticVaultFiles`, a stale value could silently mask a freshly rotated key on disk. Do not add `AddUserSecrets(...)` or `<UserSecretsId>` to MindAttic projects. Production stays on environment variables and Key Vault.
+MindAttic projects do not use User Secrets ([M.VALT-LAW-3](docs/BIBLE.md#M.VALT-LAW-3)). It would duplicate the writable APPDATA store and, because `AddUserSecrets` ranks above `AddMindAtticVaultFiles`, a stale value could silently mask a freshly rotated key on disk. Do not add `AddUserSecrets(...)` or `<UserSecretsId>` to MindAttic projects. Production stays on environment variables and Key Vault.
 
 The on-disk layout follows one invariant: folder name equals config section equals `MindAttic:Vault:<Bucket>`, and each file is a faithful image of its config subtree.
 
@@ -403,7 +403,7 @@ VaultPaths.LocalApp("Prose");            // %LOCALAPPDATA%\MindAttic\Prose
 VaultPaths.Ensure(path);                 // mkdir -p
 ```
 
-Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` or `MINDATTIC_VAULT_LOCAL_ROOT`. On non-Windows hosts the same properties resolve through the standard `Environment.SpecialFolder` lookup (for example `~/.config/MindAttic`), and root resolution never throws ([VLT-LAW-7](docs/BIBLE.md#VLT-LAW-7)).
+Override either root for tests with `MINDATTIC_VAULT_ROAMING_ROOT` or `MINDATTIC_VAULT_LOCAL_ROOT`. On non-Windows hosts the same properties resolve through the standard `Environment.SpecialFolder` lookup (for example `~/.config/MindAttic`), and root resolution never throws ([M.VALT-LAW-7](docs/BIBLE.md#M.VALT-LAW-7)).
 
 ### EnvironmentOverlay
 
@@ -595,7 +595,7 @@ powershell -File tools\codex.ps1 digest
 
 - Target frameworks: `net9.0` and `net10.0`, multi-targeted so consumers on either get a matching build.
 - Dependencies: `Microsoft.Extensions.Configuration`, `Configuration.Abstractions`, `Configuration.Binder`, `DependencyInjection.Abstractions`, `Logging.Abstractions` and `Options`, all pinned at 9.0.0 for cross-framework compatibility.
-- Versioning: whole-number, major-only (`4.0.0` to `5.0.0`, never `5.1.0`). The csproj `<Version>` is authoritative over any prose ([VLT-§4](docs/BIBLE.md#VLT-§4)).
+- Versioning: whole-number, major-only (`4.0.0` to `5.0.0`, never `5.1.0`). The csproj `<Version>` is authoritative over any prose ([M.VALT-§4](docs/BIBLE.md#M.VALT-§4)).
 - Release: bump the version whenever the public surface changes, keep `dotnet test` green, pack, then update each consumer's package reference when that consumer next needs it.
 - nuget.org currently lists only early 0.x versions of the package; current versions are packed to the local family feed.
 
@@ -625,7 +625,7 @@ The authoritative glossary and domain model are in [docs/BIBLE.md](docs/BIBLE.md
 
 This repo follows the MindAttic Codex documentation standard: a fact lives in exactly one layer, and other layers link to it by stable ID.
 
-- [docs/BIBLE.md](docs/BIBLE.md): what Vault is and is not, architecture, the Laws (VLT-LAW ids), verified state, glossary.
+- [docs/BIBLE.md](docs/BIBLE.md): what Vault is and is not, architecture, the Laws (M.VALT-LAW ids), verified state, glossary.
 - [docs/AMENDMENTS.md](docs/AMENDMENTS.md): pending decisions not yet folded into the bible (normally empty).
 - [User stories](docs/USER_STORIES.md): each completed one citing the NUnit test that proves it.
 - [docs/rfc](docs/rfc): design notes for in-flight work, currently the dashboard RFC.

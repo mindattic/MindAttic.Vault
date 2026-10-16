@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace MindAttic.Vault.Tests;
 
 /// <summary>
-/// The cross-platform root resolution chain (VLT-A: Linux/macOS/iOS/Android/Windows).
+/// The cross-platform root resolution chain (M.VALT-A: Linux/macOS/iOS/Android/Windows).
 /// <para>
 /// Every environment dependency is injected, so each branch is reachable on any build agent — the
 /// Linux-container case that used to abort the process is exercised here from a Windows dev box.

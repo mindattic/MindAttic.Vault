@@ -1,11 +1,11 @@
 ---
 codex: 1
 project: MindAttic.Vault
-code: VLT
+code: M.VALT
 layer: digest
 status: generated
-generatedFrom: VLT-§1,VLT-§3,VLT-§5,VLT-§9
-updated: 2026-10-15
+generatedFrom: M.VALT-§1,M.VALT-§3,M.VALT-§5,M.VALT-§9
+updated: 2026-10-16
 ---
 
 # MindAttic.Vault — BIBLE digest
@@ -24,12 +24,12 @@ between environments.
 - **NOT an Azure SDK wrapper.** The core package has zero Azure-only dependencies. Key Vault is
   reached by registering `AddAzureKeyVault(...)` upstream of Vault, not by Vault calling Azure.
 - **NOT a User Secrets source.** MindAttic projects do not use User Secrets (see
-  [VLT-LAW-3](#VLT-LAW-3)); the writable APPDATA store is the single local home so a stale CLI
+  [M.VALT-LAW-3](#M.VALT-LAW-3)); the writable APPDATA store is the single local home so a stale CLI
   value can never mask a freshly-rotated key.
 - **NOT a runtime secret writer in production.** `ConfigurationCredentialStore` throws on writes;
   production deploys never mutate secrets at runtime.
 - **NOT a UI.** It is a class library with no DOM. The companion `MindAttic.Vault.Dashboard`
-  (see [VLT-§7](#VLT-§7)) is a separate, in-progress app, not part of the published package.
+  (see [M.VALT-§7](#M.VALT-§7)) is a separate, in-progress app, not part of the published package.
 
 ## The Laws
 This bible **inherits the org-wide House Rules** at
@@ -42,41 +42,41 @@ here. The directly load-bearing ones for Vault: whole-number versioning
 
 Project-specific laws below:
 
-### {#VLT-LAW-1} VLT-LAW-1 — One schema, every source
+### {#M.VALT-LAW-1} M.VALT-LAW-1 — One schema, every source
 Every source surfaces the identical shape under `MindAttic:Vault`. Section names are constants in
 `VaultConfigurationKeys` — never hard-code the strings. The same wiring resolves keys on a laptop,
 on App Service, and via Key Vault with no code change.
 
-### {#VLT-LAW-2} VLT-LAW-2 — Folder name == config section
+### {#M.VALT-LAW-2} M.VALT-LAW-2 — Folder name == config section
 The single on-disk invariant: a bucket's folder under `%APPDATA%\MindAttic\` **equals** its config
 section's final segment (`MindAttic:Vault:<Bucket>`). Each file is a faithful image of its config
 subtree. Never split one credential across two stores.
 
-### {#VLT-LAW-3} VLT-LAW-3 — APPDATA is the single local source of truth; no User Secrets
+### {#M.VALT-LAW-3} M.VALT-LAW-3 — APPDATA is the single local source of truth; no User Secrets
 The writable `%APPDATA%\MindAttic\<Bucket>\` store is the one local home for every credential. Do
 **not** add `AddUserSecrets(...)` or `<UserSecretsId>` to any MindAttic project — User Secrets
 ranks above the writable store and could silently mask a freshly-rotated key. Production stays
 env vars / App Service Application Settings / Key Vault. (Sharpens
 [HOUSE-LAW-3](../../MindAttic.HouseRules.md#HOUSE-LAW-3).)
 
-### {#VLT-LAW-4} VLT-LAW-4 — Read-only in production
+### {#M.VALT-LAW-4} M.VALT-LAW-4 — Read-only in production
 `ConfigurationCredentialStore` throws `NotSupportedException` on writes. Composite resolvers route
 writes to the file fallback only — appropriate for a dev laptop, never for a production deploy.
 
-### {#VLT-LAW-5} VLT-LAW-5 — No Azure SDK in the core package
+### {#M.VALT-LAW-5} M.VALT-LAW-5 — No Azure SDK in the core package
 The published `MindAttic.Vault` has zero Azure-only dependencies. Key Vault / AWS / GCP are reached
 by registering their `IConfigurationSource` upstream of `AddMindAtticVault(...)`. Azure packages
 appear only in the separate Dashboard app, never in the library.
 
-### {#VLT-LAW-6} VLT-LAW-6 — Atomic writes, never touch real %APPDATA% in tests
+### {#M.VALT-LAW-6} M.VALT-LAW-6 — Atomic writes, never touch real %APPDATA% in tests
 File stores write atomically (temp + swap, `.bak` retained) and tolerate malformed/empty input by
 falling back to defaults. Tests redirect every path via env vars
 (`MINDATTIC_VAULT_ROAMING_ROOT`, `MINDATTIC_LLM_CREDENTIALS`, `MINDATTIC_BROKER_CREDENTIALS`,
 `MINDATTIC_FTP_CREDENTIALS`) or temp directories — no test ever reads or writes the developer's
 real `%APPDATA%`.
 
-### {#VLT-LAW-7} VLT-LAW-7 — Root resolution never throws
-`VaultPaths` always returns a rooted, non-blank root via the chain in [VLT-§4](#VLT-§4). Vault sits
+### {#M.VALT-LAW-7} M.VALT-LAW-7 — Root resolution never throws
+`VaultPaths` always returns a rooted, non-blank root via the chain in [M.VALT-§4](#M.VALT-§4). Vault sits
 in the `IConfiguration` chain, so a throw there aborts host construction (e.g. on a Linux App
 Service worker) before any application code runs. An explicit override env var always wins, and a
 host that resolves through `Environment.SpecialFolder` never resolves anywhere else. Every
