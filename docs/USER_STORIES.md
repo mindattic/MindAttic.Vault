@@ -154,3 +154,4 @@ Dependency-ordered toward "publish to nuget.org and ship the health dashboard":
 | M.VALT-T14 | 2026-10-16 | docs | closed | Update USER_STORIES.md | — |
 | M.VALT-T15 | 2026-10-19 | chore | open | Convert tracked source files to LF line endings via .gitattributes, per HOUSE-LAW-13 (low priority) | — |
 | M.VALT-T16 | 2026-10-20 | docs | open | Publish MindAttic.Vault docs to GitHub Pages via the shared Toolkit DocFX pipeline: run adopt-docs-site.ps1 (README.md as home page, docs/*.md as articles, API reference only where the code builds in CI), enable Pages with build_type=workflow, set the repo homepage URL, retire tools/build-readme.ps1 and README.htm, confirm the docs Actions run is green and https://mindattic.github.io/MindAttic.Vault/ returns 200. Depends on MAT-T8. | — |
+| M.VALT-T17 | 2026-10-21 | chore | closed | Update settings.json | — |

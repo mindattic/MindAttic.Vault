@@ -5,7 +5,7 @@
                                            "hooks":  [
                                                          {
                                                              "type":  "command",
-                                                             "command":  "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PROJECT_DIR}/.claude/hooks/inject-digest.ps1\""
+                                                             "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PROJECT_DIR}/.claude/hooks/inject-digest.ps1\""
                                                          }
                                                      ]
                                        }
