@@ -86,6 +86,15 @@ public sealed class JsonSettingsStoreContractTests : SettingsStoreContract
     protected override void Corrupt() => File.WriteAllText(tmp.Combine("settings.json"), "{ not json");
 
     [Test]
+    public void LoadOrSeed_OnAnUnwritableFolder_ReturnsDefaultsInsteadOfThrowing()
+    {
+        var blocker = tmp.Combine("blocker");
+        File.WriteAllText(blocker, "a file where the settings folder should be");
+        var store = new JsonSettingsStore<ContractSettings>(Path.Combine(blocker, "app"));
+        Assert.That(store.LoadOrSeed().Name, Is.EqualTo("default-name"));
+    }
+
+    [Test]
     public void LoadOrSeed_LeavesNoTempFilesBehind()
     {
         CreateStore().LoadOrSeed();

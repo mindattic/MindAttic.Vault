@@ -167,7 +167,10 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
             else
             {
                 result = new T();
-                SaveLocked(result);
+                // A read-only host (a deployed web app's content folder) still starts, on the defaults.
+                try { SaveLocked(result); }
+                catch (IOException) { return result; }
+                catch (UnauthorizedAccessException) { return result; }
             }
         }
         finally { writeLock.Release(); }
