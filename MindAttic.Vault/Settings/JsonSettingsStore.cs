@@ -139,18 +139,36 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
         }
     }
 
+    /// <summary>
+    /// Store for a <see cref="Manifest.SettingsAppAttribute"/> class, in the roaming folder named by its id
+    /// (<c>%APPDATA%\MindAttic\&lt;id&gt;\settings.json</c>).
+    /// </summary>
+    public static JsonSettingsStore<T> ForSettingsApp() => ForApp(Manifest.SettingsManifestCommand.AppIdOf<T>());
+
     /// <inheritdoc />
+    /// <remarks>
+    /// When <typeparamref name="T"/> carries <see cref="Manifest.SettingsAppAttribute"/>, also writes
+    /// <c>settings.manifest.json</c> beside the file (only when its content changed) so Vault.Desktop can
+    /// render the app's tab.
+    /// </remarks>
     public T LoadOrSeed()
     {
+        T result;
         writeLock.Wait();
         try
         {
-            if (File.Exists(FilePath)) return Load();
-            var defaults = new T();
-            SaveLocked(defaults);
-            return defaults;
+            if (File.Exists(FilePath)) result = Load();
+            else
+            {
+                result = new T();
+                SaveLocked(result);
+            }
         }
         finally { writeLock.Release(); }
+
+        if (Attribute.IsDefined(typeof(T), typeof(Manifest.SettingsAppAttribute)))
+            Manifest.SettingsManifestFile.WriteIfChanged(Directory, Manifest.SettingsManifestBuilder.Build<T>(jsonOptions));
+        return result;
     }
 
     /// <summary>
