@@ -13,7 +13,8 @@ public sealed class CompositionTests
         using var sandbox = new VaultSandbox();
         using var services = DesktopServices.Build();
 
-        Assert.That(services.GetRequiredService<MainViewModel>(), Is.Not.Null);
+        var main = services.GetRequiredService<MainViewModel>();
+        Assert.That(main.Profiles.Select(p => p.Id), Is.EqualTo(new[] { "Desktop", "Azure" }), "Desktop first, then every registered Profile");
     }
 
     [Test]

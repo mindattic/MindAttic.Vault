@@ -160,6 +160,38 @@ public sealed class TabHostTests
         await WaitFor(ui, () => !AppIds(vm).Contains("Gamma"));
     }
 
+    private sealed class FakeSetup : Components.Wpf.Mvvm.ObservableObject
+    {
+        public void Touch() => Raise("Status");
+    }
+
+    [Test]
+    public async Task A_Profile_with_a_setup_screen_gets_a_setup_tab_selected_until_it_is_ready()
+    {
+        var setup = new FakeSetup();
+        var azure = new FakeProfile("Azure") { Readiness = ProfileReadiness.NeedsSetup("Sign in and pick a Key Vault and App Configuration store") };
+        azure.SettingsStore.Documents["Alpha"] = new JsonObject { ["name"] = "cloud" };
+        var context = Samples.Context(localRoot: sandbox.Local);
+        var vm = new MainViewModel(new IProfile[] { new FakeProfile("Desktop"), azure }, new FakeCatalog { Manifests = { Samples.Alpha } }, context,
+            new KeyOperations(context, new FakeKeyTester()), new[] { new ProfileSetup("Azure", "Azure setup", setup) });
+        await vm.InitializeAsync();
+        Assert.That(vm.Tabs.Any(t => t is ProfileSetupTabViewModel), Is.False, "no setup tab for Desktop");
+
+        await vm.SwitchProfileAsync(azure);
+        Assert.That(vm.Tabs[0], Is.InstanceOf<ProfileSetupTabViewModel>());
+        Assert.That(vm.SelectedTab, Is.SameAs(vm.Tabs[0]));
+        Assert.That(((ProfileSetupTabViewModel)vm.Tabs[0]).Content, Is.SameAs(setup));
+        Assert.That(vm.AppTabs.Single(t => t.AppId == "Alpha").Document, Is.Null);
+
+        azure.Readiness = ProfileReadiness.Ready;   // signed in, environment picked
+        setup.Touch();
+        Assert.That(vm.AppTabs.Single(t => t.AppId == "Alpha").Document!["name"]!.GetValue<string>(), Is.EqualTo("cloud"));
+        Assert.That(vm.ProfileNotice, Is.Null);
+
+        await vm.SwitchProfileAsync(vm.Profiles[0]);
+        Assert.That(vm.Tabs.Any(t => t is ProfileSetupTabViewModel), Is.False);
+    }
+
     internal static async Task WaitFor(InlineDispatcher ui, Func<bool> condition, int timeoutMs = 10000)
     {
         var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);

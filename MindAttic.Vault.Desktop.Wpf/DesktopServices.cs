@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MindAttic.Vault.Credentials;
+using MindAttic.Vault.Desktop.Azure;
+using MindAttic.Vault.Desktop.Azure.Setup;
 using MindAttic.Vault.Desktop.Profiles;
 using MindAttic.Vault.Desktop.Services;
 using MindAttic.Vault.Desktop.ViewModels;
@@ -35,11 +37,14 @@ public static class DesktopServices
     }
 
     /// <summary>
-    /// More Profiles. Each one is an <see cref="IProfile"/> registration; the picker lists them all.
+    /// More Profiles: each one is an <see cref="IProfile"/> registration (the picker lists them all), plus an optional
+    /// <see cref="ProfileSetup"/> whose view model gets a setup tab while that Profile is selected. Register a new
+    /// platform here.
     /// </summary>
     private static void AddExtraProfiles(IServiceCollection services)
     {
-        // LAMP: add services.AddAzureProfile(); here once MindAttic.Vault.Desktop.Azure builds (and reference that project).
+        services.AddAzureProfile();
+        services.AddSingleton(sp => new ProfileSetup(AzureProfile.ProfileId, "Azure setup", sp.GetRequiredService<AzureSetupViewModel>()));
     }
 
     /// <summary>The app's service provider.</summary>

@@ -24,13 +24,27 @@ public sealed class MainViewModel : ObservableObject
     private string statusText = "";
     private string? profileNotice;
     private bool started;
+    private readonly Dictionary<string, ProfileSetupTabViewModel> setups = new(StringComparer.OrdinalIgnoreCase);
+    private string? loadedProfileName;
 
-    public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations)
+    public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations,
+        IEnumerable<ProfileSetup>? profileSetups = null)
     {
         this.catalog = catalog;
         this.context = context;
         this.operations = operations;
         foreach (var p in profiles.GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First())) Profiles.Add(p);
+        foreach (var setup in profileSetups ?? Array.Empty<ProfileSetup>())
+        {
+            if (setups.ContainsKey(setup.ProfileId)) continue;
+            setups[setup.ProfileId] = new ProfileSetupTabViewModel(setup);
+            // Signing in or picking an environment on the setup screen: recheck the Profile and reload when it changed.
+            setup.ViewModel.PropertyChanged += (_, _) =>
+            {
+                if (string.Equals(profile?.Id, setup.ProfileId, StringComparison.OrdinalIgnoreCase))
+                    context.Ui.Post(() => _ = RecheckProfileAsync());
+            };
+        }
         Keys = new KeysViewModel(context, operations) { Manifests = () => AppTabs.Select(t => t.Manifest).ToList() };
         // A key added, renamed, removed or tested anywhere: every tab that shows keys reloads.
         operations.Changed += (_, _) => context.Ui.Post(() => _ = KeysChangedAsync());
@@ -91,6 +105,7 @@ public sealed class MainViewModel : ObservableObject
         Raise(nameof(SelectedProfile));
         await CheckReadinessAsync().ConfigureAwait(true);
         await RefreshAppsAsync().ConfigureAwait(true);
+        loadedProfileName = profile?.DisplayName;
         SelectedTab ??= Tabs.FirstOrDefault();
         if (!started)
         {
@@ -116,11 +131,37 @@ public sealed class MainViewModel : ObservableObject
         profile = target;
         Raise(nameof(SelectedProfile));
         DesktopLog.For("Profiles").Information("Switched to Profile {Profile}", target.Id);
+        await ReloadEverythingAsync().ConfigureAwait(true);
+        if (!readiness.IsReady && setups.TryGetValue(target.Id, out var setupTab)) SelectedTab = setupTab;
+        StatusText = $"Showing {target.DisplayName}.";
+        return true;
+    }
+
+    /// <summary>
+    /// Re-checks the selected Profile (its setup screen changed: signed in, picked another environment) and reloads every
+    /// tab when it became ready, stopped being ready, or now points somewhere else.
+    /// </summary>
+    public async Task RecheckProfileAsync()
+    {
+        if (profile is null) return;
+        var wasReady = readiness.IsReady;
+        await CheckReadinessAsync().ConfigureAwait(true);
+        if (wasReady == readiness.IsReady && loadedProfileName == profile.DisplayName) return;
+        if (AppTabs.Any(t => t.IsDirty))
+        {
+            StatusText = $"{profile.DisplayName} changed; Save or Revert your edits, then switch Profile again to reload.";
+            return;
+        }
+        await ReloadEverythingAsync().ConfigureAwait(true);
+        Raise(nameof(SelectedProfile));
+    }
+
+    private async Task ReloadEverythingAsync()
+    {
         await CheckReadinessAsync().ConfigureAwait(true);
         await RefreshAppsAsync().ConfigureAwait(true);
         foreach (var tab in Tabs.ToList()) await LoadTabAsync(tab).ConfigureAwait(true);
-        StatusText = $"Showing {target.DisplayName}.";
-        return true;
+        loadedProfileName = profile?.DisplayName;
     }
 
     /// <summary>Syncs the tab list with the manifests on disk: new apps get a tab, removed apps lose theirs.</summary>
@@ -214,6 +255,7 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>The fixed tabs that come before Global (Get Started, Keys), in order.</summary>
     private IEnumerable<TabViewModel> FixedTabsBefore()
     {
+        if (profile is not null && setups.TryGetValue(profile.Id, out var setup)) yield return setup;
         yield return Keys;
     }
 

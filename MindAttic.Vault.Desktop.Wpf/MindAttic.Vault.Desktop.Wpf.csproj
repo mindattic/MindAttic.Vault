@@ -37,6 +37,8 @@
   <ItemGroup>
     <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
     <ProjectReference Include="..\MindAttic.Vault.Desktop.Core\MindAttic.Vault.Desktop.Core.csproj" />
+    <!-- The Azure Profile (App Configuration + Key Vault); the only Azure SDKs in the app come through it. -->
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Azure\MindAttic.Vault.Desktop.Azure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
