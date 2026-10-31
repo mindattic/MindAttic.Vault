@@ -82,7 +82,12 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
         if (string.IsNullOrWhiteSpace(providerId)) return null;
         var path = VaultConfigurationKeys.ProviderApiKeyPath(bucketSection, providerId);
         var raw = configuration[path];
-        return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+        if (!string.IsNullOrWhiteSpace(raw)) return raw.Trim();
+
+        // A source that only carries named keys (App Configuration under LAMP) still answers the
+        // single-key API with the first enabled key in the shared order.
+        var section = configuration.GetSection(VaultConfigurationKeys.ProviderSection(bucketSection, providerId));
+        return ConfigurationKeySource.ReadProvider(section).FirstOrDefault(k => !k.Disabled)?.Value;
     }
 
     /// <summary>Always throws — this store is read-only.</summary>
@@ -101,6 +106,8 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
             var providerId = providerSection.Key;
             if (string.IsNullOrWhiteSpace(providerId)) continue;
             var apiKey = providerSection[VaultConfigurationKeys.ApiKeyProperty];
+            if (string.IsNullOrWhiteSpace(apiKey))
+                apiKey = ConfigurationKeySource.ReadProvider(providerSection).FirstOrDefault(k => !k.Disabled)?.Value;
             if (!string.IsNullOrWhiteSpace(apiKey))
                 result[providerId] = apiKey.Trim();
         }
