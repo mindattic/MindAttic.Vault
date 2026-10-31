@@ -16,6 +16,9 @@ public sealed class KeyOperations(DesktopContext context, IKeyTester tester)
 
     public IKeyTester Tester => tester;
 
+    /// <summary>Tells the tabs keys changed by some other path (an import).</summary>
+    public void NotifyChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
     public Task<bool> AddAsync(IProfile profile, string providerId, string name, string secret) =>
         RunAsync(profile, providerId, "add the key", async (keys, provider) =>
         {

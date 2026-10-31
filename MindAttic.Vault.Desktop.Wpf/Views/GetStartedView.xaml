@@ -1,0 +1,68 @@
+<UserControl x:Class="MindAttic.Vault.Desktop.Views.GetStartedView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="clr-namespace:MindAttic.Components.Wpf.Controls;assembly=MindAttic.Components.Wpf">
+    <ScrollViewer Style="{StaticResource MaBodyScroll}" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16,12,16,8" MaxWidth="900" HorizontalAlignment="Left" VerticalAlignment="Top">
+            <TextBlock Text="Get Started" Style="{StaticResource MaHeading}" />
+            <TextBlock Style="{StaticResource MaMutedText}" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="Every setting already has a default. These apps need a key you bring yourself. Paste one per provider and it's tested right away; this tab goes away once each one works." />
+            <TextBlock Text="{Binding StatusText}" Style="{StaticResource MaMutedText}" Margin="0,6,0,0" TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite" />
+
+            <TextBlock Text="KEYS NEEDED" Style="{StaticResource MaSectionLabel}" Margin="0,12,0,0" AutomationProperties.Name="Keys needed" />
+            <ItemsControl ItemsSource="{Binding Missing}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource MaCard}" Margin="0,6,0,0">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Get a key" Style="{StaticResource MaTextButton}"
+                                            Command="{Binding OpenKeyPageCommand}" ToolTip="{Binding KeyPageUrl}"
+                                            Visibility="{Binding HasKeyPage, Converter={StaticResource Visible}}"
+                                            AutomationProperties.Name="{Binding DisplayName, StringFormat='Open the {0} key page'}" />
+                                    <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" FontSize="15" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <mc:MaSecretBox x:Name="Secret" Width="360" Margin="0,0,6,4" Placeholder="Paste a key"
+                                                    AutomationProperties.Name="{Binding DisplayName, StringFormat='{}{0} key'}" />
+                                    <Button Content="Add and test" Style="{StaticResource MaPrimaryButton}" Margin="0,0,0,4"
+                                            Tag="{Binding ElementName=Secret}" Click="AddAndTest_Click" />
+                                </WrapPanel>
+                                <TextBlock Text="{Binding TestMessage}" Style="{StaticResource MaMutedText}" TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Visibility="{Binding HasCandidates, Converter={StaticResource Visible}}" Margin="0,16,0,0">
+                <TextBlock Text="KEYS FOUND ON THIS PC" Style="{StaticResource MaSectionLabel}" AutomationProperties.Name="Keys found on this PC" />
+                <TextBlock Style="{StaticResource MaMutedText}" TextWrapping="Wrap"
+                           Text="These keys live outside the shared lists today. Import moves one in (an app's own copy stays that app's active key); nothing is imported unless you click." />
+                <ItemsControl ItemsSource="{Binding Candidates}" Focusable="False" Margin="0,6,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="{DynamicResource MaChromeBorder}" BorderThickness="0,0,0,1" Padding="0,8">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Import" Style="{StaticResource MaButton}" Command="{Binding ImportCommand}"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.Name="{Binding Description, StringFormat='Import {0}'}" />
+                                    <StackPanel>
+                                        <TextBlock>
+                                            <Run Text="{Binding ProviderName, Mode=OneWay}" FontWeight="SemiBold" />
+                                            <Run Text=" · " />
+                                            <Run Text="{Binding Description, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding ImportsAs}" Style="{StaticResource MaMutedText}" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

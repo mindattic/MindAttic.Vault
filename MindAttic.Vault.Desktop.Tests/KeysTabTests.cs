@@ -50,7 +50,7 @@ public sealed class KeysTabTests
     [Test]
     public void Keys_comes_before_Global_and_groups_providers_by_category()
     {
-        Assert.That(main.Tabs.Select(t => t.Id).Take(2), Is.EqualTo(new[] { "keys", "app:Global" }));
+        Assert.That(main.Tabs.Select(t => t.Id).Where(id => id != "getstarted").Take(2), Is.EqualTo(new[] { "keys", "app:Global" }));
         Assert.That(main.Keys.Groups.Select(g => g.Title), Is.EqualTo(new[] { "LLM providers", "Brokers", "Text to speech", "Media", "Other services" }));
         Assert.That(main.Keys.Groups[0].Providers.Select(p => p.Id), Does.Contain("claude").And.Contain("openai"));
         Assert.That(main.Keys.Provider("alpaca")!.Info.Category, Is.EqualTo(ProviderCategory.Broker));

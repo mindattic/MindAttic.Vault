@@ -67,8 +67,11 @@ public static class Samples
     }
 
     public static MainViewModel Main(FakeCatalog catalog, DesktopContext context, params Profiles.IProfile[] profiles) =>
-        new(profiles, catalog, context, new KeyOperations(context, new FakeKeyTester()));
+        new(profiles, catalog, context, new KeyOperations(context, new FakeKeyTester()), getStartedSources: NoImports);
 
     public static MainViewModel Main(IManifestCatalog catalog, DesktopContext context, IKeyTester tester, params Profiles.IProfile[] profiles) =>
-        new(profiles, catalog, context, new KeyOperations(context, tester));
+        new(profiles, catalog, context, new KeyOperations(context, tester), getStartedSources: NoImports);
+
+    /// <summary>Get Started without the real environment variables or workspace.</summary>
+    public static GetStartedSources NoImports { get; } = new(() => null, () => null);
 }

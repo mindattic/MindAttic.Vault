@@ -27,6 +27,7 @@ public static class DesktopServices
         // Key tests: outbound HTTPS to the provider only.
         services.AddSingleton<IKeyTester>(_ => new ProviderKeyTester());
         services.AddSingleton<KeyOperations>();
+        services.AddSingleton(GetStartedSources.Default);
 
         // Profiles: every IProfile registered here appears in the picker; Desktop is the default.
         services.AddSingleton<IProfile>(_ => new DesktopProfile());

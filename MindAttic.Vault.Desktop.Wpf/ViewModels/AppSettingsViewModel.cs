@@ -189,11 +189,11 @@ public sealed class AppSettingsViewModel : TabViewModel
         StatusText = "Reverted.";
     }
 
-    /// <summary>Takes a newer manifest for the app (its install added a setting). Reloads unless there are edits.</summary>
-    public async Task UpdateManifestAsync(SettingsManifest newer)
+    /// <summary>Takes a newer manifest for the app (its install added a setting). Reloads unless there are edits. False when unchanged.</summary>
+    public async Task<bool> UpdateManifestAsync(SettingsManifest newer)
     {
         var json = ToJson(newer);
-        if (JsonNode.DeepEquals(json, manifestJson)) return;
+        if (JsonNode.DeepEquals(json, manifestJson)) return false;
         manifest = newer;
         manifestJson = json;
         Raise(nameof(Manifest));
@@ -201,6 +201,7 @@ public sealed class AppSettingsViewModel : TabViewModel
         Raise(nameof(Description));
         SyncCredentials();
         if (profile is not null && !IsDirty) await LoadAsync(profile, ProfileReadiness.Ready).ConfigureAwait(true);
+        return true;
     }
 
     /// <summary>Asks the view to scroll to <paramref name="setting"/> (a full name). False when the app has no such field.</summary>

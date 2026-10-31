@@ -10,6 +10,9 @@
     <DataTemplate DataType="{x:Type azure:AzureSetupViewModel}">
         <azure:AzureSetupView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:GetStartedViewModel}">
+        <views:GetStartedView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type vm:KeysViewModel}">
         <views:KeysView />
     </DataTemplate>

@@ -28,7 +28,7 @@ public sealed class MainViewModel : ObservableObject
     private string? loadedProfileName;
 
     public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations,
-        IEnumerable<ProfileSetup>? profileSetups = null)
+        IEnumerable<ProfileSetup>? profileSetups = null, GetStartedSources? getStartedSources = null)
     {
         this.catalog = catalog;
         this.context = context;
@@ -46,9 +46,15 @@ public sealed class MainViewModel : ObservableObject
             };
         }
         Keys = new KeysViewModel(context, operations) { Manifests = () => AppTabs.Select(t => t.Manifest).ToList() };
+        GetStarted = new GetStartedViewModel(context, operations, getStartedSources) { Manifests = () => manifests };
         // A key added, renamed, removed or tested anywhere: every tab that shows keys reloads.
         operations.Changed += (_, _) => context.Ui.Post(() => _ = KeysChangedAsync());
     }
+
+    /// <summary>The Get Started tab (in <see cref="Tabs"/> only while a required provider has no usable key).</summary>
+    public GetStartedViewModel GetStarted { get; }
+
+    private IReadOnlyList<SettingsManifest> manifests = Array.Empty<SettingsManifest>();
 
     /// <summary>The Keys tab.</summary>
     public KeysViewModel Keys { get; }
@@ -106,7 +112,8 @@ public sealed class MainViewModel : ObservableObject
         await CheckReadinessAsync().ConfigureAwait(true);
         await RefreshAppsAsync().ConfigureAwait(true);
         loadedProfileName = profile?.DisplayName;
-        SelectedTab ??= Tabs.FirstOrDefault();
+        // Get Started comes first while a required key is missing.
+        SelectedTab = Tabs.Contains(GetStarted) ? GetStarted : SelectedTab ?? Tabs.FirstOrDefault();
         if (!started)
         {
             started = true;
@@ -167,7 +174,6 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Syncs the tab list with the manifests on disk: new apps get a tab, removed apps lose theirs.</summary>
     public async Task RefreshAppsAsync()
     {
-        IReadOnlyList<SettingsManifest> manifests;
         try { manifests = catalog.Discover(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -178,6 +184,9 @@ public sealed class MainViewModel : ObservableObject
         var global = manifests.FirstOrDefault(m => string.Equals(m.AppId, LampNames.GlobalApp, StringComparison.OrdinalIgnoreCase))
                      ?? SettingsManifestBuilder.Build<MindAtticGlobalSettings>();
         var apps = manifests.Where(m => !ReferenceEquals(m, global) && !string.Equals(m.AppId, LampNames.GlobalApp, StringComparison.OrdinalIgnoreCase));
+
+        // Whether Get Started shows depends on the required providers and their keys: decide before syncing.
+        if (profile is not null) await LoadTabAsync(GetStarted).ConfigureAwait(true);
 
         var created = new List<TabViewModel>();
         var updated = new List<(AppSettingsViewModel Tab, SettingsManifest Manifest)>();
@@ -200,10 +209,12 @@ public sealed class MainViewModel : ObservableObject
         var appsBefore = appCount;
         appCount = AppTabs.Count();
         if (SelectedTab is not null && !Tabs.Contains(SelectedTab)) SelectedTab = Tabs.FirstOrDefault();
-        foreach (var tab in created) await LoadTabAsync(tab).ConfigureAwait(true);
-        foreach (var (tab, manifest) in updated) await tab.UpdateManifestAsync(manifest).ConfigureAwait(true);
+        foreach (var tab in created.Where(t => !ReferenceEquals(t, GetStarted))) await LoadTabAsync(tab).ConfigureAwait(true);
+        var changedManifests = 0;
+        foreach (var (tab, manifest) in updated)
+            if (await tab.UpdateManifestAsync(manifest).ConfigureAwait(true)) changedManifests++;
         // Which apps use which keys changed: the Keys tab's "used by" follows.
-        if ((created.Any(t => t is AppSettingsViewModel) || appCount != appsBefore || updated.Count > 0) && !created.Contains(Keys))
+        if ((created.Any(t => t is AppSettingsViewModel) || appCount != appsBefore || changedManifests > 0) && !created.Contains(Keys))
             await LoadTabAsync(Keys).ConfigureAwait(true);
     }
 
@@ -215,6 +226,8 @@ public sealed class MainViewModel : ObservableObject
         if (profile is null || !readiness.IsReady) return;
         await LoadTabAsync(Keys).ConfigureAwait(true);
         foreach (var tab in AppTabs.ToList()) await tab.ReloadKeysAsync().ConfigureAwait(true);
+        // Get Started appears or goes away with the keys.
+        await RefreshAppsAsync().ConfigureAwait(true);
     }
 
     /// <summary>Raised when a request asks for the window to come forward.</summary>
@@ -256,6 +269,7 @@ public sealed class MainViewModel : ObservableObject
     private IEnumerable<TabViewModel> FixedTabsBefore()
     {
         if (profile is not null && setups.TryGetValue(profile.Id, out var setup)) yield return setup;
+        if (GetStarted.IsNeeded) yield return GetStarted;
         yield return Keys;
     }
 

@@ -30,7 +30,7 @@ public sealed class TabHostTests
 
         Assert.That(AppIds(vm), Is.EqualTo(new[] { "Global", "Beta", "Alpha" }));
         Assert.That(catalog.Started, Is.True);
-        Assert.That(vm.SelectedTab, Is.SameAs(vm.Tabs[0]));
+        Assert.That(vm.SelectedTab, Is.SameAs(vm.GetStarted), "Alpha's required Claude key is missing, so Get Started is first");
     }
 
     [Test]
@@ -173,7 +173,7 @@ public sealed class TabHostTests
         azure.SettingsStore.Documents["Alpha"] = new JsonObject { ["name"] = "cloud" };
         var context = Samples.Context(localRoot: sandbox.Local);
         var vm = new MainViewModel(new IProfile[] { new FakeProfile("Desktop"), azure }, new FakeCatalog { Manifests = { Samples.Alpha } }, context,
-            new KeyOperations(context, new FakeKeyTester()), new[] { new ProfileSetup("Azure", "Azure setup", setup) });
+            new KeyOperations(context, new FakeKeyTester()), new[] { new ProfileSetup("Azure", "Azure setup", setup) }, Samples.NoImports);
         await vm.InitializeAsync();
         Assert.That(vm.Tabs.Any(t => t is ProfileSetupTabViewModel), Is.False, "no setup tab for Desktop");
 

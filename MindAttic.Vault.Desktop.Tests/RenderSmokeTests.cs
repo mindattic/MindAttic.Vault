@@ -22,7 +22,9 @@ public sealed class RenderSmokeTests
     {
         using var sandbox = new VaultSandbox();
         Samples.Install<AlphaSettings>(sandbox.Roaming);
-        Samples.Install<BetaSettings>(sandbox.Roaming);
+        var beta = Samples.Beta;
+        beta.Credentials[0].Required = true; // OpenAI has no key: Get Started shows
+        Settings.Manifest.SettingsManifestFile.WriteIfChanged(Path.Combine(sandbox.Roaming, "Beta"), beta);
         var keys = NamedKeyStore.ForRoamingRoot();
         keys.Add("claude", "key1", "sk-render-test-1");
         keys.Add("claude", "2026-10-31 Alpha", "sk-render-test-2");
@@ -31,7 +33,7 @@ public sealed class RenderSmokeTests
         var app = new App();
         app.InitializeComponent();
         var context = new DesktopContext(new FakeDialogs(), new InlineDispatcher(), KeyHealthStore.ForLocalRoot(), TimeProvider.System, new SqliteAuditLog());
-        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, new FileManifestCatalog(), context, new KeyOperations(context, new FakeKeyTester()));
+        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, new FileManifestCatalog(), context, new KeyOperations(context, new FakeKeyTester()), getStartedSources: Samples.NoImports);
         vm.InitializeAsync().GetAwaiter().GetResult();
 
         var window = new MainWindow
