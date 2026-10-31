@@ -191,7 +191,21 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>The fixed tabs that come before Global (Get Started, Keys), in order.</summary>
     private IEnumerable<TabViewModel> FixedTabsBefore() => Array.Empty<TabViewModel>();
 
-    private AppSettingsViewModel CreateAppTab(SettingsManifest manifest) => new(manifest, context);
+    private AppSettingsViewModel CreateAppTab(SettingsManifest manifest)
+    {
+        var tab = new AppSettingsViewModel(manifest, context);
+        // One audit row per Save and per assignment: field and key names only, never values.
+        tab.Saved += (t, names) =>
+        {
+            if (profile is not null) context.Record(profile, t.AppId, AuditActions.SettingsSave, names);
+        };
+        tab.KeysAssigned += (t, provider, names) =>
+        {
+            if (profile is not null)
+                context.Record(profile, $"{t.AppId}/{provider}", AuditActions.KeysAssign, names, names.Count == 0 ? "shared default" : null);
+        };
+        return tab;
+    }
 
     private async Task LoadTabAsync(TabViewModel tab)
     {

@@ -19,6 +19,7 @@ public static class DesktopServices
         services.AddSingleton<IDialogs, WpfDialogs>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(_ => KeyHealthStore.ForLocalRoot());
+        services.AddSingleton<IAuditLog>(_ => new SqliteAuditLog());
         services.AddSingleton<DesktopContext>();
         services.AddSingleton<IManifestCatalog>(_ => new FileManifestCatalog());
 

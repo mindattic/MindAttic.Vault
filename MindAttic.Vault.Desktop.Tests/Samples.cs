@@ -52,10 +52,13 @@ public static class Samples
         return dir;
     }
 
-    public static DesktopContext Context(FakeDialogs? dialogs = null, IUiDispatcher? ui = null, string? localRoot = null) =>
-        new(dialogs ?? new FakeDialogs(), ui ?? new InlineDispatcher(),
-            new KeyHealthStore(Path.Combine(localRoot ?? Path.Combine(Path.GetTempPath(), "vault-desktop-health-" + Guid.NewGuid().ToString("N")), "Vault")),
-            TimeProvider.System);
+    public static DesktopContext Context(FakeDialogs? dialogs = null, IUiDispatcher? ui = null, string? localRoot = null,
+        IAuditLog? audit = null, TimeProvider? time = null)
+    {
+        var local = localRoot ?? Path.Combine(Path.GetTempPath(), "vault-desktop-health-" + Guid.NewGuid().ToString("N"));
+        return new(dialogs ?? new FakeDialogs(), ui ?? new InlineDispatcher(), new KeyHealthStore(Path.Combine(local, "Vault")),
+            time ?? TimeProvider.System, audit ?? new SqliteAuditLog(Path.Combine(local, "Vault", SqliteAuditLog.FileName)));
+    }
 
     public static MainViewModel Main(FakeCatalog catalog, DesktopContext context, params Profiles.IProfile[] profiles) =>
         new(profiles, catalog, context);
