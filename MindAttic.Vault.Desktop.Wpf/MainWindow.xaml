@@ -6,10 +6,45 @@
         Background="{DynamicResource MaChrome}" Foreground="{DynamicResource MaText}"
         WindowStartupLocation="CenterScreen">
     <DockPanel>
+        <!-- Top bar: the global Profile picker. Every tab loads from and saves to the chosen Profile. -->
+        <Grid DockPanel.Dock="Top" Margin="16,10,16,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource MaHeading}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="Profile" Style="{StaticResource MaMutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <mc:MaPicker Grid.Column="2" Width="240" ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
+                         DisplayMemberPath="DisplayName" AutomationProperties.Name="Profile"
+                         ToolTip="Where every tab loads from and saves to" />
+        </Grid>
+
+        <Border DockPanel.Dock="Top" Style="{StaticResource MaInsetCard}" Margin="16,0,16,6"
+                Visibility="{Binding HasProfileNotice, Converter={StaticResource Visible}}">
+            <TextBlock Text="{Binding ProfileNotice}" TextWrapping="Wrap" Foreground="{DynamicResource MaWarn}"
+                       AutomationProperties.LiveSetting="Assertive" />
+        </Border>
+
         <Border DockPanel.Dock="Bottom" Style="{StaticResource MaStatusBar}">
             <TextBlock Text="{Binding StatusText}" Style="{StaticResource MaMutedText}" TextTrimming="CharacterEllipsis"
                        AutomationProperties.Name="Status" AutomationProperties.LiveSetting="Polite" />
         </Border>
-        <mc:MaTabControl x:Name="Tabs" />
+
+        <mc:MaTabControl x:Name="Tabs" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                         AutomationProperties.Name="Settings tabs">
+            <mc:MaTabControl.ItemContainerStyle>
+                <Style TargetType="mc:MaTabItem" BasedOn="{StaticResource {x:Type mc:MaTabItem}}">
+                    <Setter Property="Trailing" Value="{Binding Trailing}" />
+                    <Setter Property="Status" Value="{Binding Status}" />
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                </Style>
+            </mc:MaTabControl.ItemContainerStyle>
+            <mc:MaTabControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding Title}" />
+                </DataTemplate>
+            </mc:MaTabControl.ItemTemplate>
+        </mc:MaTabControl>
     </DockPanel>
 </Window>

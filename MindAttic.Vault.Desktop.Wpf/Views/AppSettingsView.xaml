@@ -1,0 +1,96 @@
+<UserControl x:Class="MindAttic.Vault.Desktop.Views.AppSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="clr-namespace:MindAttic.Components.Wpf.Controls;assembly=MindAttic.Components.Wpf">
+    <DockPanel Margin="16,12,16,8">
+        <!-- Header: the app, Save and Revert. -->
+        <Grid DockPanel.Dock="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource MaHeading}" />
+                <TextBlock Text="{Binding Description}" Style="{StaticResource MaMutedText}" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button Content="Revert" Style="{StaticResource MaButton}" Command="{Binding RevertCommand}" Margin="0,0,8,0"
+                        ToolTip="Drop your edits and reload the saved values" />
+                <Button Content="Save" Style="{StaticResource MaPrimaryButton}" Command="{Binding SaveCommand}"
+                        ToolTip="Save the changed fields" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock DockPanel.Dock="Top" Text="{Binding StatusText}" Style="{StaticResource MaMutedText}" TextWrapping="Wrap"
+                   Margin="0,6,0,0" AutomationProperties.LiveSetting="Polite" />
+        <Border DockPanel.Dock="Top" Style="{StaticResource MaInsetCard}" Margin="0,8,0,0"
+                Visibility="{Binding HasNotice, Converter={StaticResource Visible}}">
+            <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Foreground="{DynamicResource MaWarn}" />
+        </Border>
+
+        <!-- Keys used: which named keys this app uses, by name only. -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource MaCard}" Margin="0,10,0,0"
+                Visibility="{Binding HasCredentials, Converter={StaticResource Visible}}">
+            <StackPanel>
+                <TextBlock Text="KEYS USED" Style="{StaticResource MaSectionLabel}" AutomationProperties.Name="Keys used" />
+                <ItemsControl ItemsSource="{Binding Credentials}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,6,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180" />
+                                    <ColumnDefinition Width="230" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Caption}" Style="{StaticResource MaMutedText}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="8,0">
+                                    <mc:MaPicker ItemsSource="{Binding Options}" SelectedItem="{Binding Active}"
+                                                 DisplayMemberPath="Name" StatusMemberPath="Status" StatusLabelMemberPath="StatusLabel"
+                                                 Placeholder="Shared default"
+                                                 AutomationProperties.Name="{Binding DisplayName, StringFormat='{}{0} active key'}" />
+                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource MaMutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="8,0">
+                                    <ItemsControl ItemsSource="{Binding Fallbacks}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                                    <mc:MaStatusLight Status="{Binding Status}" Label="{Binding StatusLabel}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Margin="6,0" />
+                                                    <Button Style="{StaticResource MaToolButton}" Content="&#xE70E;" Command="{Binding MoveUpCommand}"
+                                                            ToolTip="Try earlier" AutomationProperties.Name="{Binding Name, StringFormat='Move {0} up'}" />
+                                                    <Button Style="{StaticResource MaToolButton}" Content="&#xE70D;" Command="{Binding MoveDownCommand}"
+                                                            ToolTip="Try later" AutomationProperties.Name="{Binding Name, StringFormat='Move {0} down'}" />
+                                                    <Button Style="{StaticResource MaToolButton}" Content="&#xE711;" Command="{Binding RemoveCommand}"
+                                                            ToolTip="Remove this fallback" AutomationProperties.Name="{Binding Name, StringFormat='Remove fallback {0}'}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel Orientation="Horizontal">
+                                        <mc:MaPicker ItemsSource="{Binding Options}" SelectedItem="{Binding FallbackToAdd}" Width="180"
+                                                     DisplayMemberPath="Name" StatusMemberPath="Status" StatusLabelMemberPath="StatusLabel"
+                                                     Placeholder="Fallback key" AutomationProperties.Name="Fallback key to add" />
+                                        <Button Content="Add fallback" Style="{StaticResource MaButton}" Margin="6,0,0,0"
+                                                Command="{Binding AddFallbackCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Button Grid.Column="3" Content="Use shared default" Style="{StaticResource MaButton}" VerticalAlignment="Top"
+                                        Command="{Binding UseSharedDefaultCommand}"
+                                        ToolTip="Clear this app's choice: it uses the provider's keys in the Keys tab's order" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- The app's settings, generated from its manifest: one full-width row per field, full names shown. -->
+        <mc:MaSettingsForm x:Name="Form" Margin="0,10,0,0"
+                           Visibility="{Binding HasDocument, Converter={StaticResource Visible}}" />
+    </DockPanel>
+</UserControl>

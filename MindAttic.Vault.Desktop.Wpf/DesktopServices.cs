@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using MindAttic.Vault.Credentials;
+using MindAttic.Vault.Desktop.Profiles;
 using MindAttic.Vault.Desktop.Services;
 using MindAttic.Vault.Desktop.ViewModels;
 
@@ -15,8 +17,25 @@ public static class DesktopServices
     {
         services.AddSingleton<IUiDispatcher, WpfUiDispatcher>();
         services.AddSingleton<IDialogs, WpfDialogs>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(_ => KeyHealthStore.ForLocalRoot());
+        services.AddSingleton<DesktopContext>();
+        services.AddSingleton<IManifestCatalog>(_ => new FileManifestCatalog());
+
+        // Profiles: every IProfile registered here appears in the picker; Desktop is the default.
+        services.AddSingleton<IProfile>(_ => new DesktopProfile());
+        AddExtraProfiles(services);
+
         services.AddSingleton<MainViewModel>();
         return services;
+    }
+
+    /// <summary>
+    /// More Profiles. Each one is an <see cref="IProfile"/> registration; the picker lists them all.
+    /// </summary>
+    private static void AddExtraProfiles(IServiceCollection services)
+    {
+        // LAMP: add services.AddAzureProfile(); here once MindAttic.Vault.Desktop.Azure builds (and reference that project).
     }
 
     /// <summary>The app's service provider.</summary>
