@@ -3,6 +3,7 @@ using MindAttic.Components.Wpf.Mvvm;
 using MindAttic.Vault.Configuration;
 using MindAttic.Vault.Desktop.Profiles;
 using MindAttic.Vault.Desktop.Services;
+using MindAttic.Vault.Launch;
 using MindAttic.Vault.Settings;
 using MindAttic.Vault.Settings.Manifest;
 
@@ -151,6 +152,41 @@ public sealed class MainViewModel : ObservableObject
         foreach (var tab in created) await LoadTabAsync(tab).ConfigureAwait(true);
         foreach (var (tab, manifest) in updated) await tab.UpdateManifestAsync(manifest).ConfigureAwait(true);
     }
+
+    /// <summary>Raised when a request asks for the window to come forward.</summary>
+    public event EventHandler? ActivationRequested;
+
+    /// <summary>
+    /// Shows the tab of <paramref name="request"/>'s app (validated against the discovered manifests; an unknown app is
+    /// ignored and logged) and scrolls to its setting. Brings the window forward either way.
+    /// </summary>
+    public async Task<bool> OpenAsync(VaultOpenRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ActivationRequested?.Invoke(this, EventArgs.Empty);
+        var tab = FindAppTab(request.AppId);
+        if (tab is null)
+        {
+            // The app may have written its manifest a moment ago, before the watcher caught up.
+            await RefreshAppsAsync().ConfigureAwait(true);
+            tab = FindAppTab(request.AppId);
+        }
+        if (tab is null)
+        {
+            DesktopLog.For("Open").Information("Open request for unknown app {App} ignored", request.AppId);
+            StatusText = $"No app named {request.AppId} has settings here.";
+            return false;
+        }
+
+        SelectedTab = tab;
+        if (request.Setting is { } setting && !tab.RequestScroll(setting))
+            DesktopLog.For("Open").Information("Open request for an unknown setting of {App} ignored", tab.AppId);
+        DesktopLog.For("Open").Information("Opened {App}", tab.AppId);
+        return true;
+    }
+
+    private AppSettingsViewModel? FindAppTab(string appId) =>
+        AppTabs.FirstOrDefault(t => string.Equals(t.AppId, appId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The fixed tabs that come before Global (Get Started, Keys), in order.</summary>
     private IEnumerable<TabViewModel> FixedTabsBefore() => Array.Empty<TabViewModel>();

@@ -16,6 +16,8 @@
     <!-- HOUSE-LAW-1: whole-number versions only. -->
     <Version>1.0.0</Version>
     <IsPackable>false</IsPackable>
+    <!-- LibraryImport's generated marshalling. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
