@@ -29,6 +29,12 @@ public static class SettingsManifestBuilder
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    /// <summary>
+    /// True when a property name looks like a secret (ends in apiKey, password, secret, token, ...): the rule
+    /// <see cref="Build(Type, JsonSerializerOptions?)"/> refuses unless the property is marked <c>NotSecret</c>.
+    /// </summary>
+    public static bool LooksLikeSecretName(string? name) => !string.IsNullOrEmpty(name) && SecretName.IsMatch(name);
+
     /// <summary>Builds the manifest for <typeparamref name="T"/>.</summary>
     public static SettingsManifest Build<T>(JsonSerializerOptions? jsonOptions = null) where T : class, new() =>
         Build(typeof(T), jsonOptions);
@@ -114,7 +120,7 @@ public static class SettingsManifestBuilder
 
             Classify(field, prop, valueType, value, options, depth);
 
-            if (field.Kind is SettingKind.Text or SettingKind.Multiline && !(meta?.NotSecret ?? false) && SecretName.IsMatch(prop.Name))
+            if (field.Kind is SettingKind.Text or SettingKind.Multiline && !(meta?.NotSecret ?? false) && LooksLikeSecretName(prop.Name))
                 throw new SettingsManifestException(
                     $"{type.Name}.{prop.Name} looks like a secret. Keys and passwords live in the Vault credential stores, never in a settings class " +
                     "(mark it [Setting(..., NotSecret = true)] if it isn't one).");

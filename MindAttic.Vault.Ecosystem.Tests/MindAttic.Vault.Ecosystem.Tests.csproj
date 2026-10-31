@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Ecosystem integration suite (M.VALT-T67): reads THIS machine's real %APPDATA%\MindAttic and
+       %LOCALAPPDATA%\MindAttic (every app's settings.manifest.json, settings.json, the named keys and
+       assignments) read-only, and proves the LAMP migration end to end. Anything that writes works on a
+       temp copy through MINDATTIC_VAULT_ROAMING_ROOT / _LOCAL_ROOT (M.VALT-LAW-6). Every test is
+       [Category("Ecosystem")]: exclude it with the test filter TestCategory!=Ecosystem. Failure
+       messages name apps, settings and keys, never values. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF projects leave System.IO and System.Net.Http out of the implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Core\MindAttic.Vault.Desktop.Core.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Wpf\MindAttic.Vault.Desktop.Wpf.csproj" />
+  </ItemGroup>
+
+</Project>
