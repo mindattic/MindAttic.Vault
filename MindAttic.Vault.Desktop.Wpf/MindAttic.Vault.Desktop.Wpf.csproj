@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- MindAttic.Vault.Desktop.Wpf (LAMP, RFC 0003): the one native app where every MindAttic app's settings and keys are
+       edited. Never network-exposed: no Kestrel, no WebView, no HTTP server; only a current-user-only pipe for
+       "open my tab" requests and outbound HTTPS for key tests. Not packaged; installed by run.ps1. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MindAttic.Vault.Desktop</RootNamespace>
+    <AssemblyName>MindAttic.Vault.Desktop.Wpf</AssemblyName>
+    <!-- Program.Main, not the generated one: a second start hands its request to the first before WPF loads. -->
+    <StartupObject>MindAttic.Vault.Desktop.Program</StartupObject>
+    <!-- HOUSE-LAW-1: whole-number versions only. -->
+    <Version>1.0.0</Version>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF projects leave System.IO and System.Net.Http out of the implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MindAttic.Components.Wpf" Version="25.0.0" />
+    <PackageReference Include="MindAttic.Log" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Core\MindAttic.Vault.Desktop.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MindAttic.Vault.Desktop.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- View-model level tests for MindAttic.Vault.Desktop.Wpf and the Desktop Profile: no window is shown. Every test
+       runs against temp folders through MINDATTIC_VAULT_ROAMING_ROOT / _LOCAL_ROOT (M.VALT-LAW-6). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPF projects leave System.IO and System.Net.Http out of the implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Core\MindAttic.Vault.Desktop.Core.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Wpf\MindAttic.Vault.Desktop.Wpf.csproj" />
+  </ItemGroup>
+
+</Project>

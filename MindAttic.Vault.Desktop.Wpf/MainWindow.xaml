@@ -1,0 +1,15 @@
+<Window x:Class="MindAttic.Vault.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="clr-namespace:MindAttic.Components.Wpf.Controls;assembly=MindAttic.Components.Wpf"
+        Title="{Binding Title}" Width="1100" Height="760" MinWidth="640" MinHeight="420"
+        Background="{DynamicResource MaChrome}" Foreground="{DynamicResource MaText}"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource MaStatusBar}">
+            <TextBlock Text="{Binding StatusText}" Style="{StaticResource MaMutedText}" TextTrimming="CharacterEllipsis"
+                       AutomationProperties.Name="Status" AutomationProperties.LiveSetting="Polite" />
+        </Border>
+        <mc:MaTabControl x:Name="Tabs" />
+    </DockPanel>
+</Window>
