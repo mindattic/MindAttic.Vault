@@ -66,10 +66,10 @@ public static class Samples
             time ?? TimeProvider.System, audit ?? new SqliteAuditLog(Path.Combine(local, "Vault", SqliteAuditLog.FileName)));
     }
 
-    public static MainViewModel Main(FakeCatalog catalog, DesktopContext context, params Profiles.IProfile[] profiles) =>
+    public static MainViewModel Shell(FakeCatalog catalog, DesktopContext context, params Profiles.IProfile[] profiles) =>
         new(profiles, catalog, context, new KeyOperations(context, new FakeKeyTester()), getStartedSources: NoImports);
 
-    public static MainViewModel Main(IManifestCatalog catalog, DesktopContext context, IKeyTester tester, params Profiles.IProfile[] profiles) =>
+    public static MainViewModel Shell(IManifestCatalog catalog, DesktopContext context, IKeyTester tester, params Profiles.IProfile[] profiles) =>
         new(profiles, catalog, context, new KeyOperations(context, tester), getStartedSources: NoImports);
 
     /// <summary>Get Started without the real environment variables or workspace.</summary>

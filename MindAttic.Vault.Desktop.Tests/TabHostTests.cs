@@ -24,7 +24,7 @@ public sealed class TabHostTests
     public async Task Global_comes_first_then_one_tab_per_manifest()
     {
         var catalog = new FakeCatalog { Manifests = { Samples.Beta, Samples.Alpha } };
-        var vm = Samples.Main(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
+        var vm = Samples.Shell(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
 
         await vm.InitializeAsync();
 
@@ -38,7 +38,7 @@ public sealed class TabHostTests
     {
         var ui = new InlineDispatcher();
         using var catalog = new FileManifestCatalog(debounce: TimeSpan.FromMilliseconds(50));
-        var vm = Samples.Main(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
+        var vm = Samples.Shell(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
         await vm.InitializeAsync();
         Assert.That(AppIds(vm), Is.EqualTo(new[] { "Global" }));
 
@@ -55,7 +55,7 @@ public sealed class TabHostTests
     public async Task A_refresh_without_the_watcher_syncs_in_place()
     {
         var catalog = new FakeCatalog { Manifests = { Samples.Alpha } };
-        var vm = Samples.Main(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
+        var vm = Samples.Shell(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
         await vm.InitializeAsync();
         var alphaTab = vm.AppTabs.Single(t => t.AppId == "Alpha");
 
@@ -74,7 +74,7 @@ public sealed class TabHostTests
     {
         MindAtticGlobalSettings.Store().LoadOrSeed();
         using var catalog = new FileManifestCatalog();
-        var vm = Samples.Main(catalog, Samples.Context(localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
+        var vm = Samples.Shell(catalog, Samples.Context(localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
 
         await vm.InitializeAsync();
 
@@ -93,7 +93,7 @@ public sealed class TabHostTests
         azure.SettingsStore.Documents["Alpha"] = new JsonObject { ["name"] = "cloud" };
         azure.SettingsStore.Documents["Global"] = new JsonObject { ["theme"] = "Light" };
         azure.KeyStore.Keys["claude"] = new() { new("cloud key", "v") };
-        var vm = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local), desktop, azure);
+        var vm = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local), desktop, azure);
         await vm.InitializeAsync();
         var alpha = vm.AppTabs.Single(t => t.AppId == "Alpha");
         Assert.That(alpha.Document!["name"]!.GetValue<string>(), Is.EqualTo("local"));
@@ -113,7 +113,7 @@ public sealed class TabHostTests
         var dialogs = new FakeDialogs();
         var desktop = new FakeProfile("Desktop");
         var azure = new FakeProfile("Azure");
-        var vm = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(dialogs, localRoot: sandbox.Local), desktop, azure);
+        var vm = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(dialogs, localRoot: sandbox.Local), desktop, azure);
         await vm.InitializeAsync();
         var alpha = vm.AppTabs.Single(t => t.AppId == "Alpha");
         alpha.Document!["name"] = "edited";
@@ -134,7 +134,7 @@ public sealed class TabHostTests
     public async Task A_Profile_that_is_not_ready_shows_its_message_and_no_values()
     {
         var azure = new FakeProfile("Azure") { Readiness = ProfileReadiness.NeedsSetup("Sign in to Azure first.") };
-        var vm = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"), azure);
+        var vm = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"), azure);
         await vm.InitializeAsync();
 
         await vm.SwitchProfileAsync(azure);
@@ -149,7 +149,7 @@ public sealed class TabHostTests
     {
         var ui = new InlineDispatcher();
         using var catalog = new FileManifestCatalog(debounce: TimeSpan.FromMilliseconds(50));
-        var vm = Samples.Main(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
+        var vm = Samples.Shell(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
         await vm.InitializeAsync();
 
         var dir = Samples.Install<GammaSettings>(sandbox.Local);

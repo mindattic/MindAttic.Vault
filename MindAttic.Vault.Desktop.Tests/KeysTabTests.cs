@@ -30,7 +30,7 @@ public sealed class KeysTabTests
         profile = new DesktopProfile(keys: store);
         var context = Samples.Context(dialogs, localRoot: sandbox.Local, audit: audit);
         health = context.Health;
-        main = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha, Samples.Beta } }, context, tester, profile);
+        main = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha, Samples.Beta } }, context, tester, profile);
         await main.InitializeAsync();
     }
 

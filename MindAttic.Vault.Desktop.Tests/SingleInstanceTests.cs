@@ -17,7 +17,7 @@ public sealed class SingleInstanceTests
     public async Task SetUp()
     {
         sandbox = new VaultSandbox();
-        vm = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha, Samples.Beta } }, Samples.Context(localRoot: sandbox.Local),
+        vm = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha, Samples.Beta } }, Samples.Context(localRoot: sandbox.Local),
             new FakeProfile("Desktop"));
         await vm.InitializeAsync();
     }
@@ -98,7 +98,7 @@ public sealed class SingleInstanceTests
     public async Task A_request_for_an_app_whose_manifest_just_appeared_finds_it_after_a_rescan()
     {
         var catalog = new FakeCatalog { Manifests = { Samples.Alpha } };
-        var main = Samples.Main(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
+        var main = Samples.Shell(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
         await main.InitializeAsync();
         catalog.Manifests.Add(Samples.Beta); // no Changed event yet
 

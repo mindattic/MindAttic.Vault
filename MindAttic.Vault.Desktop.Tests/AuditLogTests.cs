@@ -76,7 +76,7 @@ public sealed class AuditLogTests
     {
         Samples.Install<AlphaSettings>(sandbox.Roaming);
         var profile = new DesktopProfile();
-        var vm = Samples.Main(new FileManifestCatalog(), Samples.Context(localRoot: sandbox.Local, audit: audit), new FakeKeyTester(), profile);
+        var vm = Samples.Shell(new FileManifestCatalog(), Samples.Context(localRoot: sandbox.Local, audit: audit), new FakeKeyTester(), profile);
         await vm.InitializeAsync();
         var alpha = vm.AppTabs.Single(t => t.AppId == "Alpha");
         alpha.Document!["name"] = "VALUE-THAT-MUST-NOT-BE-AUDITED";
@@ -101,7 +101,7 @@ public sealed class AuditLogTests
     {
         var profile = new FakeProfile("Desktop");
         profile.KeyStore.Keys["claude"] = new() { new NamedKey("key1", "sk-not-in-audit") };
-        var vm = Samples.Main(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local, audit: audit), profile);
+        var vm = Samples.Shell(new FakeCatalog { Manifests = { Samples.Alpha } }, Samples.Context(localRoot: sandbox.Local, audit: audit), profile);
         await vm.InitializeAsync();
 
         await vm.AppTabs.Single(t => t.AppId == "Alpha").Credentials.Single().SetActiveAsync("key1");
