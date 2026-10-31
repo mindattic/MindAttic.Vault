@@ -165,11 +165,27 @@ public sealed class VaultDesktopLauncher : IVaultDesktopLauncher
 {
     public static int ConnectTimeoutMs { get; set; } = 500;
 
+    private readonly string pipeName;
+
+    /// <summary>Talks to the Desktop on the per-user <see cref="VaultDesktopContract.PipeName"/>.</summary>
+    public VaultDesktopLauncher() : this(VaultDesktopContract.PipeName) { }
+
+    /// <summary>
+    /// Talks to a Desktop listening on <paramref name="pipeName"/> (the counterpart of
+    /// <see cref="VaultDesktopPipeServer.RunAsync"/>'s <c>pipeName</c>); tests use a unique name so they never
+    /// reach the user's running Desktop.
+    /// </summary>
+    public VaultDesktopLauncher(string pipeName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pipeName);
+        this.pipeName = pipeName;
+    }
+
     public bool TrySend(VaultOpenRequest request)
     {
         try
         {
-            using var pipe = new NamedPipeClientStream(".", VaultDesktopContract.PipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
+            using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
             pipe.Connect(ConnectTimeoutMs);
             var payload = Encoding.UTF8.GetBytes(string.Join('\n', request.ToArgs()) + "\n");
             pipe.Write(payload, 0, payload.Length);

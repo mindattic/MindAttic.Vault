@@ -162,14 +162,25 @@ public sealed class VaultDesktopPipeServerTests
     [Test]
     public async Task RealLauncher_SendReachesTheServer()
     {
+        // A unique pipe, never VaultDesktopContract.PipeName: the user's live Vault.Desktop owns that one, and
+        // the request would land in their open window instead of this server (M.VALT-T69).
+        var pipe = "MindAttic.Vault.Test." + Guid.NewGuid().ToString("N");
         var received = new TaskCompletionSource<VaultOpenRequest>();
         using var cts = new CancellationTokenSource();
-        var server = VaultDesktopPipeServer.RunAsync(r => received.TrySetResult(r), cancellationToken: cts.Token);
+        var server = VaultDesktopPipeServer.RunAsync(r => received.TrySetResult(r), pipeName: pipe, cancellationToken: cts.Token);
         await Task.Delay(100);
-        Assert.That(new VaultDesktopLauncher().TrySend(new VaultOpenRequest("Tutor")), Is.True);
+        Assert.That(new VaultDesktopLauncher(pipe).TrySend(new VaultOpenRequest("Tutor")), Is.True);
         var r = await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.That(r.AppId, Is.EqualTo("Tutor"));
         cts.Cancel();
         await server;
+    }
+
+    [Test]
+    public void Launcher_OnAPipeNobodyListensOn_ReportsNotSent()
+    {
+        var pipe = "MindAttic.Vault.Test." + Guid.NewGuid().ToString("N");
+        Assert.That(new VaultDesktopLauncher(pipe).TrySend(new VaultOpenRequest("Tutor")), Is.False);
+        Assert.Throws<ArgumentException>(() => new VaultDesktopLauncher(" "));
     }
 }
