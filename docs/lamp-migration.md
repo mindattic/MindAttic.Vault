@@ -114,6 +114,22 @@ If the app already has a folder there, use that exact name.
 - **Elevated exes** (ETW, admin tools) can't run `--write-settings-manifest` unelevated; seed today's values
   through the unelevated companion app or a scratch console calling the same `Load`.
 - Computed properties on a settings class need `[JsonIgnore]` or they get written into settings.json.
+- **Case-insensitive file names:** an app whose folder already holds `Settings.json` (capital S) can't use that
+  folder for Vault's `settings.json`; Windows sees one file. Use the other root (or keep the old file as data).
+- **When the Vault file *is* the app's existing settings.json**, "import once" can't key off the file's absence;
+  detect "not upgraded yet" another way (e.g. a new field missing) and keep a byte-identical `*.pre-lamp.json`.
+- **snake_case JSON names** need `[ConfigurationKeyName]` next to `[JsonPropertyName]` so deployed IConfiguration
+  values bind.
+- **Imported keys keep their old priority:** don't create an assignment that puts an app's old copy ahead of a
+  shared key the app used to prefer; when an app preferred something else first (e.g. a Claude OAuth session),
+  only its assigned keys win and everything else falls back as before.
+- **Settings databases:** when settings live in an app database row (JobHunt, Automata), overlay the Vault values
+  on the row in the store, import from the row once, keep non-setting state (active user, window placement) in
+  the database, and leave the schema alone so exports/imports keep working.
+- **Development-only config:** run `--write-settings-manifest` with `ASPNETCORE_ENVIRONMENT=Development` so
+  `appsettings.Development.json` values are imported too.
+- **Library options** (MindAttic.Authentication) become a group a host embeds (`MindAtticAuthSettings Auth`), bound
+  through the library's section option; one parameterized test case per option is fine for "a test per setting".
 - **Don't edit files with Windows PowerShell 5.1** `Get-Content`/`Set-Content`: it re-encodes UTF-8 and
   garbles non-ASCII text. Use the editor tools, PowerShell 7, or `-Encoding utf8` on both read and write.
 
