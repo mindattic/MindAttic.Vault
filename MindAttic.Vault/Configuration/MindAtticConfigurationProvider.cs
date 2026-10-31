@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 
 namespace MindAttic.Vault.Configuration;
@@ -21,7 +21,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     private readonly MindAtticConfigurationSource source;
     private readonly List<FileSystemWatcher> watchers = new();
     private readonly HashSet<string> watchedDirs = new(StringComparer.OrdinalIgnoreCase);
-    // Guards debounceTimer + the disposed flag together â€” a watcher event firing
+    // Guards debounceTimer + the disposed flag together — a watcher event firing
     // mid-Dispose must not be able to allocate a fresh timer after we've already
     // disposed the old one.
     private readonly object timerLock = new();
@@ -36,7 +36,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// <summary>
     /// Reads every configured bucket's providers.json + per-provider .key files
     /// and replaces the in-memory <see cref="ConfigurationProvider.Data"/>.
-    /// Idempotent â€” safe to call repeatedly (e.g. from <see cref="Reload"/>).
+    /// Idempotent — safe to call repeatedly (e.g. from <see cref="Reload"/>).
     /// </summary>
     public override void Load()
     {
@@ -67,7 +67,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
                 LoadBucketJson(tokensFile, bucket, data);
             }
 
-            // Per-provider .key override files take highest priority â€” write them
+            // Per-provider .key override files take highest priority — write them
             // last so they overwrite any apiKey already pulled from providers.json.
             if (Directory.Exists(bucketDir))
             {
@@ -88,7 +88,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
 
         Data = data;
 
-        // Wire watchers lazily â€” only after the first successful Load, so a Build
+        // Wire watchers lazily — only after the first successful Load, so a Build
         // that runs before any directory exists doesn't bind to nothing.
         if (source.ReloadOnChange)
             EnsureWatchers();
@@ -99,8 +99,8 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// leaf under <c>MindAttic:Vault:&lt;bucket&gt;</c>, recursing through the entire
     /// root object so nested objects, arrays, AND top-level scalars all surface. This
     /// makes each bucket file a faithful image of its configuration subtree:
-    /// <c>{ id: { apiKey } }</c> â†’ <c>â€¦:&lt;bucket&gt;:id:apiKey</c> (provider keyrings),
-    /// and <c>{ "to": "+1â€¦" }</c> â†’ <c>â€¦:&lt;bucket&gt;:to</c> (structured buckets like
+    /// <c>{ id: { apiKey } }</c> → <c>…:&lt;bucket&gt;:id:apiKey</c> (provider keyrings),
+    /// and <c>{ "to": "+1…" }</c> → <c>…:&lt;bucket&gt;:to</c> (structured buckets like
     /// Notifications whose root carries scalars, not just provider objects).
     /// Malformed JSON / IO errors are swallowed (consistent with the file-based stores).
     /// </summary>
@@ -118,13 +118,13 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             foreach (var prop in doc.RootElement.EnumerateObject())
                 FlattenInto(sink, $"{bucketPath}:{prop.Name}", prop.Value);
         }
-        catch { /* swallow malformed JSON â€” same as the file-based stores */ }
+        catch { /* swallow malformed JSON — same as the file-based stores */ }
     }
 
     /// <summary>
     /// Projects a provider field into the configuration sink, recursing into nested
     /// objects (<c>:child</c>) and arrays (<c>:index</c>) so every leaf is individually
-    /// navigable â€” matching the stock <c>JsonConfigurationProvider</c> convention.
+    /// navigable — matching the stock <c>JsonConfigurationProvider</c> convention.
     /// Without this, a <c>"scopes": ["a","b"]</c> field would land as a single raw-JSON
     /// blob at <c>...:scopes</c> and <c>IConfiguration.Get&lt;string[]&gt;()</c> / nested
     /// binding would silently return nothing.
@@ -157,7 +157,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
         // otherwise be reformatted by GetDouble() into lossy scientific notation
         // ("1E+20"), corrupting the on-disk value and diverging from the stock
         // JsonConfigurationProvider (which stores the raw token). GetRawText is the
-        // exact source text â€” lossless and culture-independent.
+        // exact source text — lossless and culture-independent.
         JsonValueKind.Number => element.GetRawText(),
         JsonValueKind.True   => "true",
         JsonValueKind.False  => "false",
@@ -167,7 +167,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
 
     /// <summary>
     /// Sets up one <see cref="FileSystemWatcher"/> per existing bucket directory
-    /// that isn't already being watched. Watcher creation is best-effort â€” a bucket
+    /// that isn't already being watched. Watcher creation is best-effort — a bucket
     /// whose directory doesn't yet exist (or is unwatchable) is silently skipped,
     /// but a subsequent <see cref="Load"/> after the directory is created will
     /// pick it up.
@@ -175,8 +175,8 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     private void EnsureWatchers()
     {
         // Watch the root itself (not just each bucket dir) so a bucket directory
-        // CREATED after the first Load â€” i.e. one that didn't exist when we wired the
-        // per-bucket watchers â€” is still observed. The root watcher's DirectoryName
+        // CREATED after the first Load — i.e. one that didn't exist when we wired the
+        // per-bucket watchers — is still observed. The root watcher's DirectoryName
         // notification fires when the bucket dir appears, triggering the reload that
         // attaches that bucket's own watcher. Without this, a configured bucket whose
         // directory is absent at startup would never be picked up under ReloadOnChange.
@@ -206,7 +206,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
         {
             // Don't wire new watchers onto a provider that's already torn down.
             if (disposed) return;
-            // Skip dirs we already have a live watcher for â€” but newly-created dirs
+            // Skip dirs we already have a live watcher for — but newly-created dirs
             // (that didn't exist on the first Load) will fall through.
             if (!watchedDirs.Add(dir)) return;
 
@@ -218,7 +218,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
                     NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName
                                  | NotifyFilters.DirectoryName | NotifyFilters.CreationTime
                 };
-                // Any change schedules a debounced reload â€” a single editor save
+                // Any change schedules a debounced reload — a single editor save
                 // typically fires Changed + Created + Renamed in quick succession,
                 // and we don't want to re-scan and fan-out OnReload() three times.
                 // Subscribe BEFORE enabling events so a change landing during
@@ -232,7 +232,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             }
             catch
             {
-                // Watching failed â€” dispose the partial watcher and drop the dir
+                // Watching failed — dispose the partial watcher and drop the dir
                 // from the tracked set so a later Load can retry (e.g., after a
                 // permissions change).
                 try { watcher?.Dispose(); } catch { /* best-effort */ }
@@ -246,7 +246,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
         lock (timerLock)
         {
             if (disposed) return;
-            // Single timer, reset on every event â€” fires once after the burst settles.
+            // Single timer, reset on every event — fires once after the burst settles.
             // Both the check above and the timer creation are inside timerLock so a
             // watcher event racing with Dispose can't allocate a fresh timer after
             // the old one was already torn down.
@@ -256,7 +256,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
         }
     }
 
-    // Timer callback runs on a ThreadPool thread â€” re-check disposed under the
+    // Timer callback runs on a ThreadPool thread — re-check disposed under the
     // same lock that protects Dispose so we never call Reload() on a torn-down provider.
     private void OnDebounceTick(object? _)
     {
@@ -276,7 +276,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
     /// <summary>Disposes every <see cref="FileSystemWatcher"/> attached to this provider.</summary>
     public void Dispose()
     {
-        // Stop any further watcher â†’ timer scheduling first, then tear down the
+        // Stop any further watcher → timer scheduling first, then tear down the
         // timer itself under the same lock so a racing event can't resurrect it.
         lock (timerLock)
         {
@@ -285,7 +285,7 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             debounceTimer = null;
 
             // Tear down watchers under the same lock that guards EnsureWatchers, so a
-            // concurrent Reloadâ†’Loadâ†’EnsureWatchers can't mutate these collections
+            // concurrent Reload→Load→EnsureWatchers can't mutate these collections
             // while we iterate/clear them (and, having set disposed above, any such
             // call now bails out before adding a fresh watcher).
             foreach (var w in watchers)
