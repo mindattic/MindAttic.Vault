@@ -83,6 +83,24 @@ If the app already has a folder there, use that exact name.
 10. **Verify.** Build the whole solution, run the repo's full test suite, run the import on this machine,
     start the app the way MindAttic.Orchestrator starts it and confirm it behaves as before.
 
+## Lessons from the pilot (MediaButler)
+
+- **No `run.ps1`?** Don't invent one; run `--write-settings-manifest` by hand on this machine and say so.
+- **Run controls stored as settings** (e.g. a "dry run" switch on the app's main screen) may stay where the
+  user works, as long as they read and write through the settings store. Only the settings *screen* goes.
+- **Other app files** next to settings.json (caches, catalogs, cert stores) must resolve through
+  `VaultPaths.RoamingBucket(appId)` / `VaultPaths.LocalApp(appId)`, never a hard-coded `%APPDATA%` path,
+  or tests leak into the real AppData.
+- **Test isolation is assembly-wide:** each test project sets `MINDATTIC_VAULT_ROAMING_ROOT` and
+  `MINDATTIC_VAULT_LOCAL_ROOT` to temp folders in a `[SetUpFixture]` (and passes them to any process it
+  spawns), so no test, including end-to-end ones, can write the real AppData.
+- **Remapping includes copy helpers:** anything that clones or projects the settings object (per-source copies,
+  option builders) must carry every property; add a test that each property survives the copy.
+- **Username/password pairs** (OpenSubtitles, SMTP) stay in their existing Vault stores (`Subtitles`,
+  `Notifications`); they are not named-key providers.
+- **Don't edit files with Windows PowerShell 5.1** `Get-Content`/`Set-Content`: it re-encodes UTF-8 and
+  garbles non-ASCII text. Use the editor tools, PowerShell 7, or `-Encoding utf8` on both read and write.
+
 ## Rules while migrating
 
 Work on `main` in the repo's own checkout (no branches, no worktrees). One ticket per commit, subject ending
