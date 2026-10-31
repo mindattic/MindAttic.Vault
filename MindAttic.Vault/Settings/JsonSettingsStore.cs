@@ -29,7 +29,7 @@ namespace MindAttic.Vault.Settings;
 /// The settings POCO. Must have a public parameterless constructor — used to
 /// produce defaults when the file is missing or unparseable.
 /// </typeparam>
-public class JsonSettingsStore<T> where T : class, new()
+public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
 {
     /// <summary>Default file name used by <see cref="ForApp"/> / <see cref="ForBucket"/>.</summary>
     public const string DefaultFileName = "settings.json";
@@ -137,6 +137,20 @@ public class JsonSettingsStore<T> where T : class, new()
             // Swallow: a malformed settings file should never crash the host.
             return new T();
         }
+    }
+
+    /// <inheritdoc />
+    public T LoadOrSeed()
+    {
+        writeLock.Wait();
+        try
+        {
+            if (File.Exists(FilePath)) return Load();
+            var defaults = new T();
+            SaveLocked(defaults);
+            return defaults;
+        }
+        finally { writeLock.Release(); }
     }
 
     /// <summary>

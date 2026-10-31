@@ -116,6 +116,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(_ => new Settings.JsonSettingsStore<T>(
             MindAttic.Vault.Paths.VaultPaths.RoamingBucket(app), fileName));
+        services.AddSingleton<Settings.ISettingsStore<T>>(sp => sp.GetRequiredService<Settings.JsonSettingsStore<T>>());
         return services;
     }
 }
