@@ -1,5 +1,7 @@
 <Solution>
   <Project Path="MindAttic.Vault/MindAttic.Vault.csproj" />
+  <Project Path="MindAttic.Vault.Desktop.Azure/MindAttic.Vault.Desktop.Azure.csproj" />
+  <Project Path="MindAttic.Vault.Desktop.Azure.Tests/MindAttic.Vault.Desktop.Azure.Tests.csproj" />
   <Project Path="MindAttic.Vault.Desktop.Core/MindAttic.Vault.Desktop.Core.csproj" />
   <Project Path="MindAttic.Vault.Desktop.Tests/MindAttic.Vault.Desktop.Tests.csproj" />
   <Project Path="MindAttic.Vault.Desktop.Wpf/MindAttic.Vault.Desktop.Wpf.csproj" />

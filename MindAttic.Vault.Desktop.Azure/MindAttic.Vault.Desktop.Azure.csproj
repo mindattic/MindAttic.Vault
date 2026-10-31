@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Azure Profile for MindAttic.Vault.Desktop.Wpf (RFC 0003 section 4): sign-in, the resource picker,
+       App Configuration settings and Key Vault keys. The only project in the repo that references Azure SDKs
+       (M.VALT-LAW-5: the core package stays SDK-free). Versions are pinned exactly (RFC 0003 Security 9). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MindAttic.Vault.Desktop.Azure</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="[1.21.0]" />
+    <PackageReference Include="Azure.ResourceManager" Version="[1.14.0]" />
+    <PackageReference Include="Azure.ResourceManager.KeyVault" Version="[1.5.0]" />
+    <PackageReference Include="Azure.ResourceManager.AppConfiguration" Version="[1.4.1]" />
+    <PackageReference Include="Azure.Data.AppConfiguration" Version="[1.11.1]" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="[4.11.1]" />
+    <PackageReference Include="MindAttic.Components.Wpf" Version="[25.0.0]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MindAttic.Vault\MindAttic.Vault.csproj" />
+    <ProjectReference Include="..\MindAttic.Vault.Desktop.Core\MindAttic.Vault.Desktop.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MindAttic.Vault.Desktop.Azure.Tests" />
+  </ItemGroup>
+
+</Project>
