@@ -1,4 +1,4 @@
-using MindAttic.Vault.Paths;
+﻿using MindAttic.Vault.Paths;
 
 namespace MindAttic.Vault.Credentials;
 
@@ -28,7 +28,7 @@ public sealed class KeyInUseException : InvalidOperationException
 /// <summary>
 /// The workspace-wide named key list per provider: the existing provider pools in each bucket's
 /// <c>providers.json</c>, with every entry given a unique name (unlabeled entries become
-/// <c>key1</c>, <c>key2</c>…) and aliases (<c>anthropic</c> → <c>claude</c>) merged into one list.
+/// <c>key1</c>, <c>key2</c>â€¦) and aliases (<c>anthropic</c> â†’ <c>claude</c>) merged into one list.
 /// List order is the default failover order. Writes consolidate onto the canonical provider id.
 /// Keys are only ever stored here; apps reference them by name through <see cref="KeyAssignmentStore"/>.
 /// </summary>
@@ -228,7 +228,7 @@ public sealed class NamedKeyStore
         }
     }
 
-    private static List<NamedKey> Name(List<CredentialPoolEntry> entries)
+    internal static List<NamedKey> Name(List<CredentialPoolEntry> entries)
     {
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var named = new List<NamedKey>(entries.Count);
