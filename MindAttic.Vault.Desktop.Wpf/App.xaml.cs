@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using MindAttic.Components.Wpf.Controls;
+using MindAttic.Vault.Desktop.Services;
 using MindAttic.Vault.Desktop.ViewModels;
 using MindAttic.Vault.Launch;
 using MindAttic.Vault.Settings;
@@ -55,6 +56,7 @@ public partial class App : Application
             global = new MindAtticGlobalSettings();
         }
         ApplyTheme(global.Theme);
+        RegisterProtocol();
 
         services = DesktopServices.Build();
         var main = services.GetRequiredService<MainViewModel>();
@@ -90,6 +92,23 @@ public partial class App : Application
         services?.Dispose();
         DesktopLog.Stop();
         base.OnExit(e);
+    }
+
+    /// <summary>Points the per-user mindattic-vault:// handler at this exe when it's missing or stale (HKCU only).</summary>
+    private static void RegisterProtocol()
+    {
+        var log = DesktopLog.For("Protocol");
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            var outcome = new ProtocolRegistration(new CurrentUserRegistry()).Ensure(exe, ProtocolRegistration.IsInstalledCopy(exe));
+            if (outcome != ProtocolRegistrationOutcome.AlreadyCurrent) log.Information("mindattic-vault:// handler: {Outcome}", outcome);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            log.Warning("Could not register the mindattic-vault:// handler: {Type}", ex.GetType().Name);
+        }
     }
 
     /// <summary>Follows the shared Global theme: Dark, Light, or System (the Windows app theme).</summary>

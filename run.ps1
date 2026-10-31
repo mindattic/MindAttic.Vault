@@ -32,5 +32,9 @@ dotnet publish (Join-Path $repo "$name\$name.csproj") -c $Configuration -r win-x
   -p:DebugType=none -o $dest
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 
+# The exe registers mindattic-vault:// under HKCU\Software\Classes for itself and exits (it re-checks on every start too).
+$p = Start-Process -FilePath $exe -ArgumentList '--register-protocol' -Wait -PassThru -WindowStyle Hidden
+if ($p.ExitCode -ne 0) { Write-Warning "Protocol registration returned $($p.ExitCode)" } else { Write-Host 'Registered mindattic-vault:// for this user' }
+
 Write-Host "Installed $exe"
 if ($Launch) { Start-Process -FilePath $exe }
