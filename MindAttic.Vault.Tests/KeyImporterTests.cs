@@ -117,6 +117,17 @@ public sealed class KeyImporterTests
     }
 
     [Test]
+    public void ImportAppScopedFor_OnlyTouchesThatApp()
+    {
+        new AppScopedCredentialStore("tutor", Llm).SetKey("claude", "sk-t");
+        new AppScopedCredentialStore("automata", Llm).SetKey("claude", "sk-a");
+        KeyImporter.ImportAppScopedFor("Tutor", keys);
+        Assert.That(keys.Assignments.Get("Tutor", "claude").Select(n => keys.Find("claude", n)!.Value).First(), Is.EqualTo("sk-t"));
+        Assert.That(Llm.LoadAllRaw().ContainsKey("automata-claude"), Is.True);
+        Assert.That(Llm.LoadAllRaw().ContainsKey("tutor-claude"), Is.False);
+    }
+
+    [Test]
     public void MissingLegionFileOrGarbage_OffersNothing()
     {
         Assert.That(importer.FindLegionJson(tmp.Combine("nope.json")), Is.Empty);

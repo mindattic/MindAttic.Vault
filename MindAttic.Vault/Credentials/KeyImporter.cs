@@ -150,6 +150,26 @@ public sealed class KeyImporter
         FindAppScoped().Aggregate(ImportResult.Empty, (acc, c) => acc + Import(c));
 
     /// <summary>
+    /// What a migrated app calls once at startup: moves its own app-scoped copies (if any are left)
+    /// into the shared lists and makes them its active keys, so it keeps using the same key.
+    /// Never throws; a failure leaves the copies where they are for the next start.
+    /// </summary>
+    public static ImportResult ImportAppScopedFor(string appId, NamedKeyStore? keys = null)
+    {
+        try
+        {
+            var importer = new KeyImporter(keys ?? NamedKeyStore.ForRoamingRoot());
+            return importer.FindAppScoped()
+                .Where(c => string.Equals(c.AppId, appId, StringComparison.OrdinalIgnoreCase))
+                .Aggregate(ImportResult.Empty, (acc, c) => acc + importer.Import(c));
+        }
+        catch
+        {
+            return ImportResult.Empty;
+        }
+    }
+
+    /// <summary>
     /// Puts <paramref name="value"/> in the provider's list (reusing the name of an identical value) and,
     /// when <paramref name="appId"/> is given, makes it that app's active key ahead of its existing order.
     /// Returns the key's name and whether it was added.
