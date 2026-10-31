@@ -31,6 +31,7 @@ public static class AuditActions
     public const string KeyImport = "key.import";
     public const string KeysAssign = "keys.assign";
     public const string AclFix = "acl.fix";
+    public const string CredentialsSave = "credentials.save";
 }
 
 /// <summary>Who changed what, when. Separate from the diagnostic log; writes never throw.</summary>

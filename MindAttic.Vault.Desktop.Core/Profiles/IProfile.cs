@@ -32,6 +32,13 @@ public interface IProfile
     /// <summary>The shared named keys and per-app assignments.</summary>
     IKeyBackend Keys { get; }
 
+    /// <summary>
+    /// The structured credential groups apps share (Notifications, Subtitles, AudioStore, Brokers, Ftp, Tokens,
+    /// Hosting). A Profile that doesn't implement them shows the Credentials tab read-only with this note.
+    /// </summary>
+    ICredentialGroupBackend CredentialGroups => new ReadOnlyCredentialGroupBackend(
+        $"Credential groups can't be edited in {DisplayName} yet; switch to the Desktop Profile to edit this PC's. (Azure support: M.VALT-T63.)");
+
     /// <summary>Who is making changes, for the audit log (Windows user, or the Azure UPN).</summary>
     string Actor { get; }
 }

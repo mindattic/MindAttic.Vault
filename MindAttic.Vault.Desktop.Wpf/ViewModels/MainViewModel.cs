@@ -58,6 +58,7 @@ public sealed class MainViewModel : ObservableObject
             foreach (var group in state.State.CollapsedGroups) Keys.CollapsedGroups.Add(group);
             Keys.CollapsedGroupsChanged += (_, _) => state.Update(s => s.CollapsedGroups = Keys.CollapsedGroups.Order(StringComparer.OrdinalIgnoreCase).ToList());
         }
+        Credentials = new CredentialsViewModel(context);
         GetStarted = new GetStartedViewModel(context, operations, getStartedSources) { Manifests = () => manifests };
         // A key added, renamed, removed or tested anywhere: every tab that shows keys reloads.
         operations.Changed += (_, _) => context.Ui.Post(() => _ = KeysChangedAsync());
@@ -70,6 +71,9 @@ public sealed class MainViewModel : ObservableObject
 
     /// <summary>The Keys tab.</summary>
     public KeysViewModel Keys { get; }
+
+    /// <summary>The Credentials tab: the structured credential groups apps share (M.VALT-T62).</summary>
+    public CredentialsViewModel Credentials { get; }
 
     public string Title => "MindAttic Vault";
 
@@ -95,7 +99,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (!Set(ref selectedTab, value) || value is null || !started) return;
             // Get Started and a setup tab come and go on their own; remember the tab the user works in.
-            if (value is AppSettingsViewModel or KeysViewModel) state?.Update(s => s.LastTab = value.Id);
+            if (value is AppSettingsViewModel or KeysViewModel or CredentialsViewModel) state?.Update(s => s.LastTab = value.Id);
         }
     }
 
@@ -205,7 +209,7 @@ public sealed class MainViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(target);
         if (ReferenceEquals(target, profile)) return true;
-        var dirty = AppTabs.Where(t => t.IsDirty).Select(t => t.Title).ToList();
+        var dirty = AppTabs.Where(t => t.IsDirty).Select(t => t.Title).Concat(Credentials.IsDirty ? new[] { Credentials.Title } : Array.Empty<string>()).ToList();
         if (dirty.Count > 0 && !context.Dialogs.Confirm(
                 $"Discard unsaved changes in {string.Join(", ", dirty)} and switch to {target.DisplayName}?", "Switch Profile"))
         {
@@ -233,7 +237,7 @@ public sealed class MainViewModel : ObservableObject
         var wasReady = readiness.IsReady;
         await CheckReadinessAsync().ConfigureAwait(true);
         if (wasReady == readiness.IsReady && loadedProfileName == profile.DisplayName) return;
-        if (AppTabs.Any(t => t.IsDirty))
+        if (AppTabs.Any(t => t.IsDirty) || Credentials.IsDirty)
         {
             StatusText = $"{profile.DisplayName} changed; Save or Revert your edits, then switch Profile again to reload.";
             return;
@@ -305,6 +309,8 @@ public sealed class MainViewModel : ObservableObject
         if (profile is null || !readiness.IsReady) return;
         await LoadTabAsync(Keys).ConfigureAwait(true);
         foreach (var tab in AppTabs.ToList()) await tab.ReloadKeysAsync().ConfigureAwait(true);
+        // A broker key changed on the Keys tab lives in the Brokers group too; unsaved edits there are kept.
+        if (!Credentials.IsDirty) await LoadTabAsync(Credentials).ConfigureAwait(true);
         // Get Started appears or goes away with the keys.
         await RefreshAppsAsync().ConfigureAwait(true);
     }
@@ -344,12 +350,13 @@ public sealed class MainViewModel : ObservableObject
     private AppSettingsViewModel? FindAppTab(string appId) =>
         AppTabs.FirstOrDefault(t => string.Equals(t.AppId, appId, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The fixed tabs that come before Global (Get Started, Keys), in order.</summary>
+    /// <summary>The fixed tabs that come before Global (Get Started, Keys, Credentials), in order.</summary>
     private IEnumerable<TabViewModel> FixedTabsBefore()
     {
         if (profile is not null && setups.TryGetValue(profile.Id, out var setup)) yield return setup;
         if (GetStarted.IsNeeded) yield return GetStarted;
         yield return Keys;
+        yield return Credentials;
     }
 
     private AppSettingsViewModel CreateAppTab(SettingsManifest manifest)

@@ -29,12 +29,14 @@ public sealed class DesktopProfile : IProfile
         Keys = new DesktopKeyBackend(keys ?? (roamingRoot is null
             ? NamedKeyStore.ForRoamingRoot()
             : new NamedKeyStore(roamingRoot, new KeyAssignmentStore(Path.Combine(roamingRoot, KeyAssignmentStore.Bucket)))));
+        CredentialGroups = new DesktopCredentialGroupBackend(roamingRoot);
     }
 
     public string Id => ProfileId;
     public string DisplayName => "Desktop (this PC)";
     public ISettingsBackend Settings { get; }
     public IKeyBackend Keys { get; }
+    public ICredentialGroupBackend CredentialGroups { get; }
     public string Actor { get; } = $"{Environment.UserDomainName}\\{Environment.UserName}";
 
     public Task<ProfileReadiness> GetReadinessAsync(CancellationToken cancellationToken = default) =>

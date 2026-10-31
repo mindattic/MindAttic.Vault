@@ -16,6 +16,9 @@
     <DataTemplate DataType="{x:Type vm:KeysViewModel}">
         <views:KeysView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CredentialsViewModel}">
+        <views:CredentialsView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type vm:AppSettingsViewModel}">
         <views:AppSettingsView />
     </DataTemplate>

@@ -19,6 +19,7 @@ public sealed class CanaryLeakTests
 {
     private const string Canary = "sk-ant-CANARY-7f3e9c1d-do-not-leak";
     private const string Canary2 = "sk-oa-CANARY-2b8d4a60-do-not-leak";
+    private const string Canary3 = "cred-CANARY-5a1b2c3d-only-in-groups";
 
     private sealed class RefusingHandler : HttpMessageHandler
     {
@@ -85,6 +86,28 @@ public sealed class CanaryLeakTests
             await alpha.SaveAsync();
             shown.Add(alpha.StatusText);
             main.SelectedTab = alpha;
+
+            // Credentials tab (M.VALT-T62): a secret into a new group (from its template), a new token, a failed save
+            // (stale file), and nothing secret in any bindable property or message.
+            var subtitles = main.Credentials.Group("Subtitles")!;
+            subtitles.Entry("OpenSubtitles")!.Field("password")!.EditSecret(Canary3);
+            subtitles.Entry("OpenSubtitles")!.Field("user")!.Text = "canary user";
+            await subtitles.SaveAsync();
+            shown.Add(subtitles.StatusText);
+            var tokens = main.Credentials.Group("Tokens")!;
+            tokens.Root!.AddField("canary-token");
+            tokens.Root.Field("canary-token")!.EditSecret(Canary3);
+            await tokens.SaveAsync();
+            shown.Add(tokens.StatusText);
+            await main.Credentials.ReloadAsync();
+            var again = main.Credentials.Group("Subtitles")!;
+            again.Entry("OpenSubtitles")!.Field("password")!.EditSecret(Canary3 + "-stale");
+            File.SetLastWriteTimeUtc(Path.Combine(sandbox.Roaming, "Subtitles", "providers.json"), DateTime.UtcNow);
+            File.AppendAllText(Path.Combine(sandbox.Roaming, "Subtitles", "providers.json"), " ");
+            await again.SaveAsync(); // refused: changed on disk
+            shown.Add(again.StatusText);
+            shown.AddRange(BindableText.Of(main.Credentials).Where(t => t.Contains("CANARY", StringComparison.Ordinal)));
+            main.SelectedTab = main.Credentials;
             DesktopLog.For("Canary").Information("A key reaching a template: {@Key}", store.GetKeys("claude").Single());
             state.Flush();
         }
@@ -107,6 +130,16 @@ public sealed class CanaryLeakTests
             .Where(f => Contains(File.ReadAllBytes(f), Canary) || Contains(File.ReadAllBytes(f), Canary2))
             .ToList();
         Assert.That(holders, Is.EqualTo(new[] { allowed }), "only the key store holds the key: " + string.Join(", ", holders));
+
+        var credentialHolders = Directory.EnumerateFiles(sandbox.Root, "*", SearchOption.AllDirectories)
+            .Where(f => File.ReadAllBytes(f).AsSpan().IndexOf(Encoding.UTF8.GetBytes(Canary3)) >= 0
+                        || File.ReadAllBytes(f).AsSpan().IndexOf(Encoding.Unicode.GetBytes(Canary3)) >= 0)
+            .Select(f => Path.GetRelativePath(sandbox.Roaming, f))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Assert.That(credentialHolders, Is.EqualTo(new[] { Path.Combine("Subtitles", "providers.json"), Path.Combine("Tokens", "tokens.json") }),
+            "only the groups' own files hold a credential: " + string.Join(", ", credentialHolders));
+        Assert.That(dialogs.Errors.Any(e => e.Contains("changed on disk", StringComparison.Ordinal)), Is.True, "the stale save was refused");
 
         var messages = shown.Concat(dialogs.Errors).Concat(dialogs.Infos).Concat(dialogs.Confirms).ToList();
         Assert.That(messages.Where(m => m.Contains("CANARY", StringComparison.Ordinal)), Is.Empty);
