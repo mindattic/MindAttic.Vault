@@ -28,7 +28,8 @@ public static class ProviderCatalog
     /// <summary>Every known provider.</summary>
     public static IReadOnlyList<ProviderInfo> All { get; } = new ProviderInfo[]
     {
-        new("claude",     "Claude",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://console.anthropic.com/settings/keys", new[] { "anthropic" }),
+        // claude-api: the id Legion 24 used for Claude; LLM\providers.json still holds an entry under it (M.VALT-T70).
+        new("claude",     "Claude",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://console.anthropic.com/settings/keys", new[] { "anthropic", "claude-api" }),
         new("openai",     "OpenAI",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://platform.openai.com/api-keys", Array.Empty<string>()),
         new("gemini",     "Gemini",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://aistudio.google.com/app/apikey", new[] { "google" }),
         new("deepseek",   "DeepSeek",   ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://platform.deepseek.com/api_keys", Array.Empty<string>()),
@@ -46,6 +47,11 @@ public static class ProviderCatalog
         new("ideogram",   "Ideogram",   ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://ideogram.ai/manage-api", Array.Empty<string>()),
         new("google-maps","Google Maps",ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://console.cloud.google.com/google/maps-apis/credentials", Array.Empty<string>()),
         new("here-maps",  "HERE Maps",  ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://platform.here.com/admin/apps", Array.Empty<string>()),
+        // Declared by Prose (image/video generation) and TaxRateCollector (ZIP city lookup) (M.VALT-T70).
+        new("stability",  "Stability AI", ProviderCategory.Other, LlmCredentialStore.Bucket, "https://platform.stability.ai/account/keys", Array.Empty<string>()),
+        new("kling",      "Kling AI",   ProviderCategory.Other,  LlmCredentialStore.Bucket, null, Array.Empty<string>()),
+        new("runway",     "Runway",     ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://dev.runwayml.com/", Array.Empty<string>()),
+        new("usps",       "USPS",       ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://developers.usps.com/", Array.Empty<string>()),
         new("alpaca",     "Alpaca",     ProviderCategory.Broker, BrokerCredentialStore.Bucket, "https://app.alpaca.markets/paper/dashboard/overview", Array.Empty<string>()),
         new("elevenlabs", "ElevenLabs", ProviderCategory.Tts,    LlmCredentialStore.Bucket, "https://elevenlabs.io/app/settings/api-keys", Array.Empty<string>()),
         new("jellyfin",   "Jellyfin",   ProviderCategory.Media,  LlmCredentialStore.Bucket, null, Array.Empty<string>()),
