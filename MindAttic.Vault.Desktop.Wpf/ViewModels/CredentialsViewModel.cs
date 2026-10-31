@@ -173,7 +173,7 @@ public sealed class CredentialGroupViewModel : ObservableObject
     {
         removedEntries.Clear();
         Entries.Clear();
-        var allSecret = Info.Shape == CredentialGroupShape.Tokens;
+        var allSecret = Info.MaskAll;
         var rootFields = Info.Shape == CredentialGroupShape.Entries
             ? loaded.Where(p => p.Value is not JsonObject).ToList()
             : loaded.ToList();
@@ -205,7 +205,7 @@ public sealed class CredentialGroupViewModel : ObservableObject
             return false;
         }
         // A removed entry added back again starts empty: Save removes the old one first.
-        Entries.Add(new CredentialEntryViewModel(this, clean, isNew: true, allSecret: false, Array.Empty<KeyValuePair<string, JsonNode?>>()));
+        Entries.Add(new CredentialEntryViewModel(this, clean, isNew: true, Info.MaskAll, Array.Empty<KeyValuePair<string, JsonNode?>>()));
         NewEntryName = "";
         StatusText = $"Added {clean}; add its fields, then Save.";
         RaiseDirty();
@@ -358,7 +358,7 @@ public sealed class CredentialEntryViewModel : ObservableObject
     public string FullName => group.FullName(IsRoot ? null : Name, null);
 
     /// <summary>"Add token" on a token map, "Add field" elsewhere.</summary>
-    public string AddLabel => allSecret ? "Add token" : "Add field";
+    public string AddLabel => group.Info.Shape == CredentialGroupShape.Tokens ? "Add token" : "Add field";
 
     public ObservableCollection<CredentialFieldViewModel> Fields { get; } = new();
 

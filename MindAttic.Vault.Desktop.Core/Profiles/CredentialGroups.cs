@@ -36,6 +36,12 @@ public sealed record CredentialGroupInfo(string Bucket, string FileName, Credent
 
     /// <summary>The shape a known group starts from when its file doesn't exist yet (null: empty).</summary>
     public JsonObject? Template { get; init; }
+
+    /// <summary>
+    /// Every value is masked, whatever its name: a token map, and any bucket found on disk whose fields nobody described
+    /// (a <c>pepper.v1</c> or <c>signing-cert-pfx</c> is a secret without saying so).
+    /// </summary>
+    public bool MaskAll { get; init; } = Shape == CredentialGroupShape.Tokens;
 }
 
 /// <summary>A group's values as loaded, with the backend's version for concurrency.</summary>
@@ -110,11 +116,11 @@ public static class CredentialGroupCatalog
             "Unity.Multiplayer mp-host cloud credentials: GHCR, AWS, Azure, Fly, GameLift, OCI, VPS and the rendezvous secret."),
     };
 
-    private static readonly string[] SecretWords = { "password", "secret", "apikey", "authtoken", "token", "connectionstring", "key" };
+    private static readonly string[] SecretWords = { "password", "secret", "apikey", "authtoken", "token", "connectionstring", "key", "pepper", "kek", "pfx", "private" };
 
     /// <summary>
     /// True for a field whose name says it holds a secret (password, secret, apiKey, authToken, token, connectionString,
-    /// key; case-insensitive). A name ending in <c>Path</c> or <c>Url</c> (e.g. <c>sshKeyPath</c>) names where a secret
+    /// key; also pepper, kek, pfx, private; case-insensitive). A name ending in <c>Path</c> or <c>Url</c> (e.g. <c>sshKeyPath</c>) names where a secret
     /// is, not the secret, and stays plain.
     /// </summary>
     public static bool LooksSecret(string? fieldName)
@@ -182,7 +188,7 @@ public sealed class DesktopCredentialGroupBackend : ICredentialGroupBackend
                         if (groups.Any(g => string.Equals(g.Bucket, bucket, StringComparison.OrdinalIgnoreCase)
                                             && string.Equals(g.FileName, file, StringComparison.OrdinalIgnoreCase))) continue;
                         var title = groups.Any(g => string.Equals(g.Bucket, bucket, StringComparison.OrdinalIgnoreCase)) ? $"{bucket} ({file})" : bucket;
-                        groups.Add(new CredentialGroupInfo(bucket, file, shape, title));
+                        groups.Add(new CredentialGroupInfo(bucket, file, shape, title) { MaskAll = true });
                     }
                 }
             }

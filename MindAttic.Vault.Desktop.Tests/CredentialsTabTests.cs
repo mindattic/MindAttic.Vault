@@ -266,6 +266,23 @@ public sealed class CredentialsTabTests
     }
 
     [Test]
+    public async Task Every_field_of_a_bucket_nobody_described_is_masked()
+    {
+        Write("Security", "providers.json", """{ "pepper.v1": "pep-secret", "dp-kek": "kek-secret", "label": "plain-looking", "nested": { "x": "y" } }""");
+        await main.Credentials.ReloadAsync();
+        var group = main.Credentials.Group("Security")!;
+
+        Assert.That(group.Root!.Fields.Where(f => !f.IsNested).Select(f => (f.Name, f.IsSecret)),
+            Is.EqualTo(new[] { ("pepper.v1", true), ("dp-kek", true), ("label", true) }));
+        Assert.That(group.Entry("nested")!.Field("x")!.IsSecret, Is.True);
+        Assert.That(group.AddEntry("more"), Is.True);
+        group.Entry("more")!.AddField("anything");
+        Assert.That(group.Entry("more")!.Field("anything")!.IsSecret, Is.True);
+        Assert.That(BindableText.Of(main.Credentials).Where(t => t.Contains("-secret", StringComparison.Ordinal) || t.Contains("plain-looking", StringComparison.Ordinal)),
+            Is.Empty);
+    }
+
+    [Test]
     public void Credentials_comes_right_after_Keys()
     {
         Assert.That(main.Tabs.Select(t => t.Id).Where(id => id != "getstarted").Take(3), Is.EqualTo(new[] { "keys", "credentials", "app:Global" }));
@@ -297,7 +314,7 @@ public sealed class CredentialsTabTests
     [Test]
     public void Secret_looking_names()
     {
-        foreach (var name in new[] { "password", "Secret", "apiKey", "authToken", "token", "connectionString", "appKey", "AccessKeyId", "clientSecret" })
+        foreach (var name in new[] { "password", "Secret", "apiKey", "authToken", "token", "connectionString", "appKey", "AccessKeyId", "clientSecret", "pepper.v1", "dp-kek", "signing-cert-pfx", "sshPrivateKey" })
             Assert.That(CredentialGroupCatalog.LooksSecret(name), Is.True, name);
         foreach (var name in new[] { "user", "smtpHost", "smtpPort", "from", "accountSid", "brandId", "baseUrl", "sshKeyPath", "type", "container" })
             Assert.That(CredentialGroupCatalog.LooksSecret(name), Is.False, name);
