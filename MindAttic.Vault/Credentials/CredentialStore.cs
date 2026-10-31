@@ -66,8 +66,8 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
     public bool ProvidersFileExists() => File.Exists(ProvidersFilePath);
 
     /// <inheritdoc />
-    /// <remarks>Equivalent to the first entry of <see cref="GetKeys"/>.</remarks>
-    public string? GetKey(string providerId) => GetKeys(providerId).FirstOrDefault()?.Key;
+    /// <remarks>The first entry of <see cref="GetKeys"/> that isn't disabled.</remarks>
+    public string? GetKey(string providerId) => GetKeys(providerId).FirstOrDefault(k => !k.Disabled)?.Key;
 
     /// <inheritdoc />
     /// <exception cref="ArgumentException">
@@ -132,7 +132,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
 
         var pool = (keys ?? Array.Empty<CredentialPoolEntry>())
             .Where(k => !string.IsNullOrWhiteSpace(k.Key))
-            .Select(k => new CredentialPoolEntry(k.Key.Trim(), string.IsNullOrWhiteSpace(k.Label) ? null : k.Label!.Trim()))
+            .Select(k => new CredentialPoolEntry(k.Key.Trim(), string.IsNullOrWhiteSpace(k.Label) ? null : k.Label!.Trim(), k.Disabled))
             .ToList();
 
         lock (writeLock)
@@ -144,7 +144,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
             // schema) then layer the full pool on top, then atomically replace the file.
             var providers = LoadProvidersRawSafe();
             var existingJson = providers.TryGetValue(providerId, out var existing) ? existing : null;
-            var primaryKey = pool.Count > 0 ? pool[0].Key : "";
+            var primaryKey = pool.FirstOrDefault(k => !k.Disabled)?.Key ?? "";
             var withPrimary = MergeApiKeyIntoProviderJson(existingJson, providerId, primaryKey);
             providers[providerId] = MergeApiKeysIntoProviderJson(withPrimary, pool);
 
@@ -294,7 +294,8 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
                     var label = entry.TryGetProperty("label", out var labelProp) && labelProp.ValueKind == JsonValueKind.String
                         ? labelProp.GetString()
                         : null;
-                    result.Add(new CredentialPoolEntry(key.Trim(), label));
+                    var disabled = entry.TryGetProperty("disabled", out var disabledProp) && disabledProp.ValueKind == JsonValueKind.True;
+                    result.Add(new CredentialPoolEntry(key.Trim(), label, disabled));
                 }
                 if (result.Count > 0) return result;
             }
@@ -394,13 +395,15 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         }
 
         obj.Remove("apiKeys");
-        if (pool.Count > 1)
+        // A single plain key keeps the pre-pool file shape; a name or a disabled flag needs the array.
+        if (pool.Count > 1 || pool.Any(k => !string.IsNullOrWhiteSpace(k.Label) || k.Disabled))
         {
             var arr = new JsonArray();
             foreach (var entry in pool)
             {
                 var entryObj = new JsonObject { ["key"] = entry.Key };
                 if (!string.IsNullOrWhiteSpace(entry.Label)) entryObj["label"] = entry.Label;
+                if (entry.Disabled) entryObj["disabled"] = true;
                 arr.Add(entryObj);
             }
             obj["apiKeys"] = arr;

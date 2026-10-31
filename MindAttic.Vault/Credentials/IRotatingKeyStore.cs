@@ -2,11 +2,17 @@ namespace MindAttic.Vault.Credentials;
 
 /// <summary>
 /// One entry in a provider's key pool: the raw key plus an optional human-readable
-/// label (e.g. "Personal", "Team B") shown back in a settings UI.
+/// label (e.g. "Personal", "Team B") shown back in a settings UI. The label is the key's
+/// name in <see cref="NamedKeyStore"/>.
 /// </summary>
 /// <param name="Key">The raw API key. Required, non-empty.</param>
 /// <param name="Label">Optional display label. <c>null</c> when the caller didn't set one.</param>
-public sealed record CredentialPoolEntry(string Key, string? Label = null);
+/// <param name="Disabled">When true the key is kept but never used.</param>
+public sealed record CredentialPoolEntry(string Key, string? Label = null, bool Disabled = false)
+{
+    /// <summary>Never includes the key, so a logged entry can't leak it.</summary>
+    public override string ToString() => $"CredentialPoolEntry {{ Label = {Label}, Disabled = {Disabled} }}";
+}
 
 /// <summary>
 /// Optional capability for a credential store that can hold MORE THAN ONE key per
