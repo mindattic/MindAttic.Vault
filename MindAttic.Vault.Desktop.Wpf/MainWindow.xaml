@@ -26,6 +26,17 @@
                        AutomationProperties.LiveSetting="Assertive" />
         </Border>
 
+        <!-- Folder permissions (RFC 0003 Security 5): local keys are plain text, so other accounts must not read them. -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource MaInsetCard}" Margin="16,0,16,6"
+                Visibility="{Binding HasFolderAccessWarning, Converter={StaticResource Visible}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Fix" Style="{StaticResource MaPrimaryButton}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        Command="{Binding FixFolderAccessCommand}" AutomationProperties.Name="Fix the Vault folder permissions" />
+                <TextBlock Text="{Binding FolderAccessWarning}" TextWrapping="Wrap" Foreground="{DynamicResource MaWarn}"
+                           AutomationProperties.LiveSetting="Assertive" />
+            </DockPanel>
+        </Border>
+
         <Border DockPanel.Dock="Bottom" Style="{StaticResource MaStatusBar}">
             <TextBlock Text="{Binding StatusText}" Style="{StaticResource MaMutedText}" TextTrimming="CharacterEllipsis"
                        AutomationProperties.Name="Status" AutomationProperties.LiveSetting="Polite" />

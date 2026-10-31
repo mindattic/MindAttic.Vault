@@ -85,6 +85,7 @@ public partial class App : Application
 
         await ready;
         if (StartupRequest is not null) await main.OpenAsync(StartupRequest);
+        await main.CheckFolderAccessAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)

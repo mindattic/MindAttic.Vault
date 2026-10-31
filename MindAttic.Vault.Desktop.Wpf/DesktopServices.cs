@@ -29,6 +29,7 @@ public static class DesktopServices
         services.AddSingleton<KeyOperations>();
         services.AddSingleton(GetStartedSources.Default);
         services.AddSingleton(_ => new DesktopStateKeeper());
+        services.AddSingleton(_ => FolderAccessCheck.ForCurrentUser());
 
         // Profiles: every IProfile registered here appears in the picker; Desktop is the default.
         services.AddSingleton<IProfile>(_ => new DesktopProfile());

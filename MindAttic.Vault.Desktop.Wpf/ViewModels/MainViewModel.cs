@@ -27,11 +27,16 @@ public sealed class MainViewModel : ObservableObject
     private readonly Dictionary<string, ProfileSetupTabViewModel> setups = new(StringComparer.OrdinalIgnoreCase);
     private string? loadedProfileName;
     private readonly DesktopStateKeeper? state;
+    private readonly FolderAccessCheck? folderAccess;
+    private IReadOnlyList<AclProblem> folderProblems = Array.Empty<AclProblem>();
 
     public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations,
-        IEnumerable<ProfileSetup>? profileSetups = null, GetStartedSources? getStartedSources = null, DesktopStateKeeper? state = null)
+        IEnumerable<ProfileSetup>? profileSetups = null, GetStartedSources? getStartedSources = null, DesktopStateKeeper? state = null,
+        FolderAccessCheck? folderAccess = null)
     {
         this.catalog = catalog;
+        this.folderAccess = folderAccess;
+        FixFolderAccessCommand = new AsyncRelayCommand(FixFolderAccessAsync, () => HasFolderAccessWarning);
         this.state = state;
         this.context = context;
         this.operations = operations;
@@ -113,6 +118,60 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool HasProfileNotice => !string.IsNullOrEmpty(ProfileNotice);
+
+    /// <summary>Which Vault folders other accounts can read, or null when they're private.</summary>
+    public string? FolderAccessWarning => folderProblems.Count == 0
+        ? null
+        : "Your keys are readable by other accounts on this PC: " + FolderAccessCheck.Describe(folderProblems)
+          + ". Fix removes those accounts and keeps only you, SYSTEM and Administrators.";
+
+    public bool HasFolderAccessWarning => folderProblems.Count > 0;
+
+    public System.Windows.Input.ICommand FixFolderAccessCommand { get; }
+
+    /// <summary>The startup check that the folders holding keys aren't readable by other accounts.</summary>
+    public async Task CheckFolderAccessAsync()
+    {
+        if (folderAccess is null) return;
+        try
+        {
+            SetFolderProblems(await Task.Run(folderAccess.Check).ConfigureAwait(true));
+            if (folderProblems.Count > 0)
+                DesktopLog.For("Access").Warning("Vault folders readable by other accounts: {Folders}", folderProblems.Select(p => p.Folder));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or SystemException)
+        {
+            DesktopLog.For("Access").Warning("Checking the Vault folders' permissions failed: {Type}", ex.GetType().Name);
+        }
+    }
+
+    /// <summary>The one-click fix: restricts each flagged folder to the current user, SYSTEM and Administrators.</summary>
+    public async Task FixFolderAccessAsync()
+    {
+        if (folderAccess is null || folderProblems.Count == 0) return;
+        var fixing = folderProblems;
+        try
+        {
+            SetFolderProblems(await Task.Run(() => folderAccess.Fix(fixing)).ConfigureAwait(true));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or SystemException)
+        {
+            DesktopLog.For("Access").Warning("Fixing the Vault folders' permissions failed: {Type}", ex.GetType().Name);
+            context.Dialogs.Error($"Couldn't change the folder permissions ({ex.GetType().Name}). Run Vault as the folders' owner and try again.",
+                "Folder permissions");
+            return;
+        }
+        if (profile is not null)
+            context.Record(profile, "folders", AuditActions.AclFix, fixing.Select(p => p.Folder));
+        StatusText = folderProblems.Count == 0 ? "Only you, SYSTEM and Administrators can read the Vault folders now." : "Some folders are still open.";
+    }
+
+    private void SetFolderProblems(IReadOnlyList<AclProblem> problems)
+    {
+        folderProblems = problems;
+        Raise(nameof(FolderAccessWarning));
+        Raise(nameof(HasFolderAccessWarning));
+    }
 
     /// <summary>
     /// Picks <paramref name="profileId"/> (else the remembered Profile, else Desktop), builds the tabs, reopens the remembered
