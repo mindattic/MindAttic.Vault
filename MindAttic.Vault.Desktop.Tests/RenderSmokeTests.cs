@@ -30,8 +30,8 @@ public sealed class RenderSmokeTests
 
         var app = new App();
         app.InitializeComponent();
-        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, new FileManifestCatalog(),
-            new DesktopContext(new FakeDialogs(), new InlineDispatcher(), KeyHealthStore.ForLocalRoot(), TimeProvider.System, new SqliteAuditLog()));
+        var context = new DesktopContext(new FakeDialogs(), new InlineDispatcher(), KeyHealthStore.ForLocalRoot(), TimeProvider.System, new SqliteAuditLog());
+        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, new FileManifestCatalog(), context, new KeyOperations(context, new FakeKeyTester()));
         vm.InitializeAsync().GetAwaiter().GetResult();
 
         var window = new MainWindow

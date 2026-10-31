@@ -76,7 +76,7 @@ public sealed class AuditLogTests
     {
         Samples.Install<AlphaSettings>(sandbox.Roaming);
         var profile = new DesktopProfile();
-        var vm = new ViewModels.MainViewModel(new IProfile[] { profile }, new FileManifestCatalog(), Samples.Context(localRoot: sandbox.Local, audit: audit));
+        var vm = Samples.Main(new FileManifestCatalog(), Samples.Context(localRoot: sandbox.Local, audit: audit), new FakeKeyTester(), profile);
         await vm.InitializeAsync();
         var alpha = vm.AppTabs.Single(t => t.AppId == "Alpha");
         alpha.Document!["name"] = "VALUE-THAT-MUST-NOT-BE-AUDITED";

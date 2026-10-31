@@ -22,6 +22,9 @@ public static class DesktopServices
         services.AddSingleton<IAuditLog>(_ => new SqliteAuditLog());
         services.AddSingleton<DesktopContext>();
         services.AddSingleton<IManifestCatalog>(_ => new FileManifestCatalog());
+        // Key tests: outbound HTTPS to the provider only.
+        services.AddSingleton<IKeyTester>(_ => new ProviderKeyTester());
+        services.AddSingleton<KeyOperations>();
 
         // Profiles: every IProfile registered here appears in the picker; Desktop is the default.
         services.AddSingleton<IProfile>(_ => new DesktopProfile());

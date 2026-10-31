@@ -61,5 +61,8 @@ public static class Samples
     }
 
     public static MainViewModel Main(FakeCatalog catalog, DesktopContext context, params Profiles.IProfile[] profiles) =>
-        new(profiles, catalog, context);
+        new(profiles, catalog, context, new KeyOperations(context, new FakeKeyTester()));
+
+    public static MainViewModel Main(IManifestCatalog catalog, DesktopContext context, IKeyTester tester, params Profiles.IProfile[] profiles) =>
+        new(profiles, catalog, context, new KeyOperations(context, tester));
 }

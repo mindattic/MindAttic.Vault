@@ -116,9 +116,16 @@ public sealed class AppSettingsViewModel : TabViewModel
             return;
         }
         await LoadDocumentAsync().ConfigureAwait(true);
+        await ReloadKeysAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Re-reads the "Keys used" rows (after a key was added, renamed, removed or tested).</summary>
+    public async Task ReloadKeysAsync()
+    {
+        if (profile is null) return;
         foreach (var c in Credentials)
         {
-            try { await c.LoadAsync(target.Keys).ConfigureAwait(true); }
+            try { await c.LoadAsync(profile.Keys).ConfigureAwait(true); }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 DesktopLog.For("Tabs").Warning("Loading {Provider} keys for {App} failed: {Type}", c.ProviderId, AppId, ex.GetType().Name);

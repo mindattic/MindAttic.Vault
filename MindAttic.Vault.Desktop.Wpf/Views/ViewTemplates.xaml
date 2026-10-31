@@ -3,6 +3,9 @@
                     xmlns:vm="clr-namespace:MindAttic.Vault.Desktop.ViewModels"
                     xmlns:views="clr-namespace:MindAttic.Vault.Desktop.Views">
     <!-- Views are DataTemplates keyed by view-model type (RFC 0003 section 8). -->
+    <DataTemplate DataType="{x:Type vm:KeysViewModel}">
+        <views:KeysView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type vm:AppSettingsViewModel}">
         <views:AppSettingsView />
     </DataTemplate>

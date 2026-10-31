@@ -17,6 +17,7 @@ public sealed class MainViewModel : ObservableObject
 {
     private readonly IManifestCatalog catalog;
     private readonly DesktopContext context;
+    private readonly KeyOperations operations;
     private IProfile? profile;
     private ProfileReadiness readiness = ProfileReadiness.Ready;
     private TabViewModel? selectedTab;
@@ -24,12 +25,19 @@ public sealed class MainViewModel : ObservableObject
     private string? profileNotice;
     private bool started;
 
-    public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context)
+    public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations)
     {
         this.catalog = catalog;
         this.context = context;
+        this.operations = operations;
         foreach (var p in profiles.GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First())) Profiles.Add(p);
+        Keys = new KeysViewModel(context, operations) { Manifests = () => AppTabs.Select(t => t.Manifest).ToList() };
+        // A key added, renamed, removed or tested anywhere: every tab that shows keys reloads.
+        operations.Changed += (_, _) => context.Ui.Post(() => _ = KeysChangedAsync());
     }
+
+    /// <summary>The Keys tab.</summary>
+    public KeysViewModel Keys { get; }
 
     public string Title => "MindAttic Vault";
 
@@ -148,9 +156,24 @@ public sealed class MainViewModel : ObservableObject
                 if (tab is AppSettingsViewModel app && d.Manifest is not null) updated.Add((app, d.Manifest));
             });
 
+        var appsBefore = appCount;
+        appCount = AppTabs.Count();
         if (SelectedTab is not null && !Tabs.Contains(SelectedTab)) SelectedTab = Tabs.FirstOrDefault();
         foreach (var tab in created) await LoadTabAsync(tab).ConfigureAwait(true);
         foreach (var (tab, manifest) in updated) await tab.UpdateManifestAsync(manifest).ConfigureAwait(true);
+        // Which apps use which keys changed: the Keys tab's "used by" follows.
+        if ((created.Any(t => t is AppSettingsViewModel) || appCount != appsBefore || updated.Count > 0) && !created.Contains(Keys))
+            await LoadTabAsync(Keys).ConfigureAwait(true);
+    }
+
+    private int appCount;
+
+    /// <summary>After any key change: the Keys tab and every app's "Keys used" reload.</summary>
+    public async Task KeysChangedAsync()
+    {
+        if (profile is null || !readiness.IsReady) return;
+        await LoadTabAsync(Keys).ConfigureAwait(true);
+        foreach (var tab in AppTabs.ToList()) await tab.ReloadKeysAsync().ConfigureAwait(true);
     }
 
     /// <summary>Raised when a request asks for the window to come forward.</summary>
@@ -189,7 +212,10 @@ public sealed class MainViewModel : ObservableObject
         AppTabs.FirstOrDefault(t => string.Equals(t.AppId, appId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The fixed tabs that come before Global (Get Started, Keys), in order.</summary>
-    private IEnumerable<TabViewModel> FixedTabsBefore() => Array.Empty<TabViewModel>();
+    private IEnumerable<TabViewModel> FixedTabsBefore()
+    {
+        yield return Keys;
+    }
 
     private AppSettingsViewModel CreateAppTab(SettingsManifest manifest)
     {
@@ -203,6 +229,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (profile is not null)
                 context.Record(profile, $"{t.AppId}/{provider}", AuditActions.KeysAssign, names, names.Count == 0 ? "shared default" : null);
+            context.Ui.Post(() => _ = LoadTabAsync(Keys));
         };
         return tab;
     }

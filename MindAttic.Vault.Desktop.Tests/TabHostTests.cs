@@ -38,7 +38,7 @@ public sealed class TabHostTests
     {
         var ui = new InlineDispatcher();
         using var catalog = new FileManifestCatalog(debounce: TimeSpan.FromMilliseconds(50));
-        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, catalog, Samples.Context(ui: ui, localRoot: sandbox.Local));
+        var vm = Samples.Main(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
         await vm.InitializeAsync();
         Assert.That(AppIds(vm), Is.EqualTo(new[] { "Global" }));
 
@@ -74,7 +74,7 @@ public sealed class TabHostTests
     {
         MindAtticGlobalSettings.Store().LoadOrSeed();
         using var catalog = new FileManifestCatalog();
-        var vm = new MainViewModel(new IProfile[] { new DesktopProfile() }, catalog, Samples.Context(localRoot: sandbox.Local));
+        var vm = Samples.Main(catalog, Samples.Context(localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
 
         await vm.InitializeAsync();
 

@@ -202,3 +202,19 @@ public sealed class FakeKeyBackend : IKeyBackend
             .Where(a => a.Key.Provider == ProviderCatalog.Normalize(providerId) && a.Value.Contains(name, StringComparer.OrdinalIgnoreCase))
             .Select(a => a.Key.App).OrderBy(a => a).ToList());
 }
+
+/// <summary>Answers key tests from a script per key value (default: Ok), and records which values were tested.</summary>
+public sealed class FakeKeyTester : IKeyTester
+{
+    public Dictionary<string, KeyTestResult> Results { get; } = new();
+    public List<(string Provider, string Key)> Tested { get; } = new();
+    public HashSet<string> Untestable { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool CanTest(string providerId) => !Untestable.Contains(providerId);
+
+    public Task<KeyTestResult> TestAsync(string providerId, string key, CancellationToken cancellationToken = default)
+    {
+        Tested.Add((providerId, key));
+        return Task.FromResult(Results.TryGetValue(key, out var r) ? r : new KeyTestResult(KeyTestOutcome.Ok, "accepted"));
+    }
+}
