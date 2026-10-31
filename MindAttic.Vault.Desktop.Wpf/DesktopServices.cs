@@ -28,6 +28,7 @@ public static class DesktopServices
         services.AddSingleton<IKeyTester>(_ => new ProviderKeyTester());
         services.AddSingleton<KeyOperations>();
         services.AddSingleton(GetStartedSources.Default);
+        services.AddSingleton(_ => new DesktopStateKeeper());
 
         // Profiles: every IProfile registered here appears in the picker; Desktop is the default.
         services.AddSingleton<IProfile>(_ => new DesktopProfile());

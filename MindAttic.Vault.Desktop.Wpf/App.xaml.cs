@@ -60,7 +60,8 @@ public partial class App : Application
 
         services = DesktopServices.Build();
         var main = services.GetRequiredService<MainViewModel>();
-        var window = new MainWindow { DataContext = main };
+        var window = new MainWindow { DataContext = main, State = services.GetRequiredService<DesktopStateKeeper>() };
+        window.RestorePlacement();
         MaWindow.SetThemedTitleBar(window, true);
         MainWindow = window;
         window.Show();
@@ -89,7 +90,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         stopListening.Cancel();
-        services?.Dispose();
+        services?.Dispose(); // flushes the remembered state
         DesktopLog.Stop();
         base.OnExit(e);
     }

@@ -26,11 +26,13 @@ public sealed class MainViewModel : ObservableObject
     private bool started;
     private readonly Dictionary<string, ProfileSetupTabViewModel> setups = new(StringComparer.OrdinalIgnoreCase);
     private string? loadedProfileName;
+    private readonly DesktopStateKeeper? state;
 
     public MainViewModel(IEnumerable<IProfile> profiles, IManifestCatalog catalog, DesktopContext context, KeyOperations operations,
-        IEnumerable<ProfileSetup>? profileSetups = null, GetStartedSources? getStartedSources = null)
+        IEnumerable<ProfileSetup>? profileSetups = null, GetStartedSources? getStartedSources = null, DesktopStateKeeper? state = null)
     {
         this.catalog = catalog;
+        this.state = state;
         this.context = context;
         this.operations = operations;
         foreach (var p in profiles.GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First())) Profiles.Add(p);
@@ -46,6 +48,11 @@ public sealed class MainViewModel : ObservableObject
             };
         }
         Keys = new KeysViewModel(context, operations) { Manifests = () => AppTabs.Select(t => t.Manifest).ToList() };
+        if (state is not null)
+        {
+            foreach (var group in state.State.CollapsedGroups) Keys.CollapsedGroups.Add(group);
+            Keys.CollapsedGroupsChanged += (_, _) => state.Update(s => s.CollapsedGroups = Keys.CollapsedGroups.Order(StringComparer.OrdinalIgnoreCase).ToList());
+        }
         GetStarted = new GetStartedViewModel(context, operations, getStartedSources) { Manifests = () => manifests };
         // A key added, renamed, removed or tested anywhere: every tab that shows keys reloads.
         operations.Changed += (_, _) => context.Ui.Post(() => _ = KeysChangedAsync());
@@ -79,7 +86,12 @@ public sealed class MainViewModel : ObservableObject
     public TabViewModel? SelectedTab
     {
         get => selectedTab;
-        set => Set(ref selectedTab, value);
+        set
+        {
+            if (!Set(ref selectedTab, value) || value is null || !started) return;
+            // Get Started and a setup tab come and go on their own; remember the tab the user works in.
+            if (value is AppSettingsViewModel or KeysViewModel) state?.Update(s => s.LastTab = value.Id);
+        }
     }
 
     public IEnumerable<AppSettingsViewModel> AppTabs => Tabs.OfType<AppSettingsViewModel>();
@@ -102,9 +114,13 @@ public sealed class MainViewModel : ObservableObject
 
     public bool HasProfileNotice => !string.IsNullOrEmpty(ProfileNotice);
 
-    /// <summary>Picks the first Profile (or <paramref name="profileId"/>), builds the tabs and starts watching manifests.</summary>
+    /// <summary>
+    /// Picks <paramref name="profileId"/> (else the remembered Profile, else Desktop), builds the tabs, reopens the remembered
+    /// tab (Get Started wins while a required key is missing) and starts watching manifests.
+    /// </summary>
     public async Task InitializeAsync(string? profileId = null)
     {
+        profileId ??= state?.State.LastProfile;
         profile = Profiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.OrdinalIgnoreCase))
                   ?? Profiles.FirstOrDefault(p => p.Id == DesktopProfile.ProfileId)
                   ?? Profiles.FirstOrDefault();
@@ -113,7 +129,10 @@ public sealed class MainViewModel : ObservableObject
         await RefreshAppsAsync().ConfigureAwait(true);
         loadedProfileName = profile?.DisplayName;
         // Get Started comes first while a required key is missing.
-        SelectedTab = Tabs.Contains(GetStarted) ? GetStarted : SelectedTab ?? Tabs.FirstOrDefault();
+        var remembered = Tabs.FirstOrDefault(t => string.Equals(t.Id, state?.State.LastTab, StringComparison.OrdinalIgnoreCase));
+        SelectedTab = Tabs.Contains(GetStarted) ? GetStarted
+            : profile is not null && !readiness.IsReady && setups.TryGetValue(profile.Id, out var setupTab) ? setupTab
+            : remembered ?? SelectedTab ?? Tabs.FirstOrDefault();
         if (!started)
         {
             started = true;
@@ -137,6 +156,7 @@ public sealed class MainViewModel : ObservableObject
 
         profile = target;
         Raise(nameof(SelectedProfile));
+        state?.Update(s => s.LastProfile = target.Id);
         DesktopLog.For("Profiles").Information("Switched to Profile {Profile}", target.Id);
         await ReloadEverythingAsync().ConfigureAwait(true);
         if (!readiness.IsReady && setups.TryGetValue(target.Id, out var setupTab)) SelectedTab = setupTab;
