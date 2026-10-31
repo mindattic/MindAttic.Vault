@@ -17,7 +17,7 @@ public sealed class VaultConfigurationTests
 
     private IConfigurationRoot Build(bool reload = false, bool keys = true) =>
         new ConfigurationBuilder()
-            .AddMindAtticVaultConfiguration(s => { s.RoamingRoot = tmp.Path; s.ReloadOnChange = reload; s.IncludeKeys = keys; })
+            .AddMindAtticVaultConfiguration(s => { s.RoamingRoot = tmp.Path; s.LocalRoot = tmp.Combine("local"); s.ReloadOnChange = reload; s.IncludeKeys = keys; })
             .Build();
 
     private NamedKeyStore Keys() => new(tmp.Path, new KeyAssignmentStore(tmp.Combine("Vault")));
@@ -107,7 +107,7 @@ public sealed class VaultConfigurationTests
 
     [Test]
     public void MissingRoot_YieldsEmptyTree() =>
-        Assert.That(new ConfigurationBuilder().AddMindAtticVaultConfiguration(s => s.RoamingRoot = tmp.Combine("nope")).Build().AsEnumerable(), Is.Empty);
+        Assert.That(new ConfigurationBuilder().AddMindAtticVaultConfiguration(s => { s.RoamingRoot = tmp.Combine("nope"); s.LocalRoot = tmp.Combine("nope2"); }).Build().AsEnumerable(), Is.Empty);
 }
 
 [TestFixture]

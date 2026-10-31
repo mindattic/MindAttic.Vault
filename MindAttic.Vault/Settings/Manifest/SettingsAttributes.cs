@@ -24,6 +24,12 @@ public sealed class SettingsAppAttribute : Attribute
 
     /// <summary>Optional one-line description shown at the top of the tab.</summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Per-machine settings: kept in <c>%LOCALAPPDATA%\MindAttic\&lt;id&gt;</c> instead of the roaming folder
+    /// (hotkeys, start-with-Windows and other things that must not follow the user to another PC).
+    /// </summary>
+    public bool Local { get; set; }
 }
 
 /// <summary>Describes one setting's row in Vault.Desktop. Unattributed public properties still appear, labeled from their name.</summary>

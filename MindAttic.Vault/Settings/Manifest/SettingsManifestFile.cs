@@ -72,18 +72,39 @@ public static class SettingsManifestFile
         }
     }
 
-    /// <summary>Every manifest under the roaming root (one per app folder), ordered by display name.</summary>
-    public static IReadOnlyList<(string Directory, SettingsManifest Manifest)> Discover(string? roamingRoot = null)
+    /// <summary>
+    /// Every manifest under the roaming and local roots (one per app folder), with the folder it was found in,
+    /// ordered by display name. An app id found in both keeps the one whose folder matches its declared scope.
+    /// </summary>
+    public static IReadOnlyList<(string Directory, SettingsManifest Manifest)> Discover(string? roamingRoot = null, string? localRoot = null)
     {
-        var root = roamingRoot ?? VaultPaths.RoamingRoot;
-        var found = new List<(string, SettingsManifest)>();
-        if (!Directory.Exists(root)) return found;
-        foreach (var dir in Directory.EnumerateDirectories(root))
+        var found = new Dictionary<string, (string Dir, SettingsManifest Manifest)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (root, scope) in new[] { (roamingRoot ?? VaultPaths.RoamingRoot, SettingsManifest.RoamingScope), (localRoot ?? VaultPaths.LocalRoot, SettingsManifest.LocalScope) })
         {
-            var manifest = TryRead(Path.Combine(dir, SettingsManifest.FileName));
-            if (manifest is not null) found.Add((dir, manifest));
+            if (!Directory.Exists(root)) continue;
+            IEnumerable<string> dirs;
+            try { dirs = Directory.EnumerateDirectories(root).ToList(); }
+            catch { continue; }
+            foreach (var dir in dirs)
+            {
+                var manifest = TryRead(Path.Combine(dir, SettingsManifest.FileName));
+                if (manifest is null) continue;
+                var matchesScope = string.Equals(manifest.Scope, scope, StringComparison.OrdinalIgnoreCase);
+                if (found.TryGetValue(manifest.AppId, out var existing)
+                    && string.Equals(existing.Manifest.Scope, ScopeOf(existing.Dir, roamingRoot), StringComparison.OrdinalIgnoreCase)
+                    && !matchesScope)
+                    continue;
+                found[manifest.AppId] = (dir, manifest);
+            }
         }
-        return found.OrderBy(f => f.Item2.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+        return found.Values.Select(v => (v.Dir, v.Manifest))
+            .OrderBy(f => f.Manifest.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static string ScopeOf(string dir, string? roamingRoot)
+    {
+        var roaming = Path.GetFullPath(roamingRoot ?? VaultPaths.RoamingRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(dir).StartsWith(roaming, StringComparison.OrdinalIgnoreCase) ? SettingsManifest.RoamingScope : SettingsManifest.LocalScope;
     }
 }
 

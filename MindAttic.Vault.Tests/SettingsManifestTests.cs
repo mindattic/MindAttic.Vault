@@ -230,7 +230,7 @@ public sealed class SettingsManifestTests
         using var tmp = new TempDirectory("manifest");
         SettingsManifestFile.WriteIfChanged(tmp.Combine("SampleApp"), Build());
         Directory.CreateDirectory(tmp.Combine("NoManifest"));
-        var found = SettingsManifestFile.Discover(tmp.Path);
+        var found = SettingsManifestFile.Discover(tmp.Path, tmp.Combine("no-local"));
         Assert.That(found.Select(f => f.Manifest.AppId), Is.EqualTo(new[] { "SampleApp" }));
     }
 

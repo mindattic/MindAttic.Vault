@@ -53,6 +53,7 @@ public static class SettingsManifestBuilder
             DisplayName = app.DisplayName,
             Icon = app.Icon,
             Description = app.Description,
+            Scope = app.Local ? SettingsManifest.LocalScope : SettingsManifest.RoamingScope,
             ConfigurationPrefix = prefix,
             Fields = BuildFields(settingsType, instance, prefix, options, depth: 0),
         };

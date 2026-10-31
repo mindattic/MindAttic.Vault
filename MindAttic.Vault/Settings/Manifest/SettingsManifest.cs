@@ -100,6 +100,12 @@ public sealed class SettingsManifest
     public string? Icon { get; set; }
     public string? Description { get; set; }
 
+    /// <summary><see cref="RoamingScope"/> (default) or <see cref="LocalScope"/>: which AppData root holds the app's folder.</summary>
+    public string Scope { get; set; } = RoamingScope;
+
+    public const string RoamingScope = "Roaming";
+    public const string LocalScope = "Local";
+
     /// <summary>Settings file name inside the app's folder.</summary>
     public string SettingsFile { get; set; } = "settings.json";
 

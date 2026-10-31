@@ -143,7 +143,13 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
     /// Store for a <see cref="Manifest.SettingsAppAttribute"/> class, in the roaming folder named by its id
     /// (<c>%APPDATA%\MindAttic\&lt;id&gt;\settings.json</c>).
     /// </summary>
-    public static JsonSettingsStore<T> ForSettingsApp() => ForApp(Manifest.SettingsManifestCommand.AppIdOf<T>());
+    public static JsonSettingsStore<T> ForSettingsApp()
+    {
+        var id = Manifest.SettingsManifestCommand.AppIdOf<T>();
+        var local = typeof(T).GetCustomAttributes(typeof(Manifest.SettingsAppAttribute), false)
+            .OfType<Manifest.SettingsAppAttribute>().Single().Local;
+        return local ? ForLocalApp(id) : ForApp(id);
+    }
 
     /// <inheritdoc />
     /// <remarks>

@@ -54,7 +54,11 @@ public sealed class VaultConfigurationSource : IConfigurationSource
 
     public IConfigurationProvider Build(IConfigurationBuilder builder) => new VaultConfigurationProvider(this);
 
+    /// <summary>Local root override (tests). Defaults to <see cref="VaultPaths.LocalRoot"/>; scanned for per-machine apps.</summary>
+    public string? LocalRoot { get; set; }
+
     internal string EffectiveRoot => RoamingRoot ?? VaultPaths.RoamingRoot;
+    internal string EffectiveLocalRoot => LocalRoot ?? VaultPaths.LocalRoot;
 }
 
 internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDisposable
@@ -74,20 +78,24 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
         var root = source.EffectiveRoot;
         if (Directory.Exists(root))
         {
-            LoadSettings(root, data);
+            LoadSettings(root, data, localOnly: false);
             if (source.IncludeKeys) LoadKeys(root, data);
             LoadAssignments(root, data);
         }
+        if (Directory.Exists(source.EffectiveLocalRoot)) LoadSettings(source.EffectiveLocalRoot, data, localOnly: true);
         Data = data;
         if (source.ReloadOnChange) EnsureWatcher(root);
     }
 
-    private static void LoadSettings(string root, IDictionary<string, string?> data)
+    private static void LoadSettings(string root, IDictionary<string, string?> data, bool localOnly)
     {
         foreach (var dir in SafeDirectories(root))
         {
             var file = Path.Combine(dir, "settings.json");
             if (!File.Exists(file)) continue;
+            // Local AppData holds many apps' caches; only folders a per-machine manifest claims are settings.
+            if (localOnly && SettingsManifestFile.TryRead(Path.Combine(dir, SettingsManifest.FileName))?.Scope != SettingsManifest.LocalScope)
+                continue;
             try
             {
                 using var doc = JsonDocument.Parse(File.ReadAllText(file));
