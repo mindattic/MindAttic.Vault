@@ -176,16 +176,15 @@ public class TokenStoreTests
     }
 
     [Test]
-    public void Set_Creates_Backup_File_When_Replacing_Existing_Tokens_Json()
+    public void Set_Never_Leaves_The_Replaced_Token_In_A_Backup_File()
     {
         using var tmp = new TempDirectory();
         var store = new TokenStore(tmp.Path);
 
-        store.Set("github", "g1");        // first write — no backup yet.
+        store.Set("github", "old-token");
+        store.Set("github", "new-token");
         Assert.That(File.Exists(Path.Combine(tmp.Path, "tokens.json.bak")), Is.False);
-
-        store.Set("github", "g2");        // overwrite — File.Replace produces a .bak.
-        Assert.That(File.Exists(Path.Combine(tmp.Path, "tokens.json.bak")), Is.True);
+        Assert.That(Directory.GetFiles(tmp.Path).Any(f => File.ReadAllText(f).Contains("old-token")), Is.False);
     }
 
     [Test]

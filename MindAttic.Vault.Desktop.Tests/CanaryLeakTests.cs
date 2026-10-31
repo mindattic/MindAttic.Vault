@@ -103,12 +103,8 @@ public sealed class CanaryLeakTests
         Assert.That(dialogs.Errors, Is.Not.Empty, "the refused duplicate and removal showed messages");
 
         var allowed = Path.Combine(sandbox.Roaming, "LLM", "providers.json");
-        // M.VALT-T61: core's CredentialStore still keeps the previous providers.json as providers.json.bak (same folder and
-        // ACL); drop this allowance when that's fixed.
-        var coreBackup = allowed + ".bak";
         var holders = Directory.EnumerateFiles(sandbox.Root, "*", SearchOption.AllDirectories)
             .Where(f => Contains(File.ReadAllBytes(f), Canary) || Contains(File.ReadAllBytes(f), Canary2))
-            .Where(f => !string.Equals(f, coreBackup, StringComparison.OrdinalIgnoreCase))
             .ToList();
         Assert.That(holders, Is.EqualTo(new[] { allowed }), "only the key store holds the key: " + string.Join(", ", holders));
 

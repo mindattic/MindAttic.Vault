@@ -311,16 +311,15 @@ public class CredentialStoreTests
     // ── Atomic swap behaviour ───────────────────────────────────────────────────
 
     [Test]
-    public void SetKey_Creates_Backup_File_When_Replacing_Existing_Providers_Json()
+    public void SetKey_Never_Leaves_The_Replaced_Key_In_A_Backup_File()
     {
         using var tmp = new TempDirectory();
         var store = new CredentialStore(tmp.Path);
 
-        store.SetKey("a", "1");          // first write — no backup yet.
+        store.SetKey("a", "old-secret");
+        store.SetKey("a", "new-secret");
         Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json.bak")), Is.False);
-
-        store.SetKey("a", "2");          // overwrite — File.Replace produces a .bak.
-        Assert.That(File.Exists(Path.Combine(tmp.Path, "providers.json.bak")), Is.True);
+        Assert.That(Directory.GetFiles(tmp.Path).Any(f => File.ReadAllText(f).Contains("old-secret")), Is.False);
     }
 
     [Test]

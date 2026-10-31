@@ -296,7 +296,8 @@ public sealed class TokenStore
     private void CommitAtomicSwap(string tempPath)
     {
         if (File.Exists(TokensFilePath))
-            File.Replace(tempPath, TokensFilePath, TokensFilePath + ".bak");
+            // No backup copy: it would keep a replaced or removed token on disk.
+            File.Replace(tempPath, TokensFilePath, null);
         else
             File.Move(tempPath, TokensFilePath);
     }

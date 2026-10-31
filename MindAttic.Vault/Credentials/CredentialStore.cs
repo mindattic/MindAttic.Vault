@@ -467,7 +467,8 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         {
             File.WriteAllBytes(tempPath, ms.ToArray());
             if (File.Exists(ProvidersFilePath))
-                File.Replace(tempPath, ProvidersFilePath, ProvidersFilePath + ".bak");
+                // No backup copy: it would keep a replaced or removed key on disk.
+                File.Replace(tempPath, ProvidersFilePath, null);
             else
                 File.Move(tempPath, ProvidersFilePath);
         }
