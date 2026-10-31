@@ -32,6 +32,12 @@ public sealed class BetaSettings
     public bool Enabled { get; set; } = true;
 }
 
+[SettingsApp("Gamma", "Gamma Local", Local = true)]
+public sealed class GammaSettings
+{
+    public int Size { get; set; } = 48;
+}
+
 /// <summary>Builds the pieces a view-model test needs.</summary>
 public static class Samples
 {
@@ -42,7 +48,7 @@ public static class Samples
     public const string AlphaCount = "MindAttic:Settings:Alpha:count";
     public const string AlphaHost = "MindAttic:Settings:Alpha:connection:host";
 
-    /// <summary>Writes <typeparamref name="T"/>'s manifest (and seeded settings) into its app folder under the roaming root.</summary>
+    /// <summary>Writes <typeparamref name="T"/>'s manifest into its app folder under <paramref name="roamingRoot"/> (pass the local root for a Local app).</summary>
     public static string Install<T>(string roamingRoot) where T : class, new()
     {
         var manifest = SettingsManifestBuilder.Build<T>();

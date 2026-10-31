@@ -11,8 +11,9 @@ using MindAttic.Vault.Settings.Manifest;
 namespace MindAttic.Vault.Desktop.Profiles;
 
 /// <summary>
-/// The <c>Desktop</c> Profile: this PC's AppData. Settings are each app folder's <c>settings.json</c> under the roaming
-/// root (read and written as JSON, atomically); keys are the shared named lists and app assignments in the local
+/// The <c>Desktop</c> Profile: this PC's AppData. Settings are each app folder's <c>settings.json</c> under the root its
+/// manifest's <see cref="SettingsManifest.Scope"/> names (roaming by default, local for per-machine apps), read and
+/// written as JSON, atomically; keys are the shared named lists and app assignments in the local
 /// credential stores. Always ready.
 /// </summary>
 public sealed class DesktopProfile : IProfile
@@ -21,9 +22,10 @@ public sealed class DesktopProfile : IProfile
 
     /// <param name="roamingRoot">The roaming root; null resolves <see cref="VaultPaths.RoamingRoot"/> on every call.</param>
     /// <param name="keys">The named key store; null uses the one under the roaming root.</param>
-    public DesktopProfile(string? roamingRoot = null, NamedKeyStore? keys = null)
+    /// <param name="localRoot">The local root for <c>Local</c>-scope apps; null resolves <see cref="VaultPaths.LocalRoot"/> on every call.</param>
+    public DesktopProfile(string? roamingRoot = null, NamedKeyStore? keys = null, string? localRoot = null)
     {
-        Settings = new DesktopSettingsBackend(roamingRoot);
+        Settings = new DesktopSettingsBackend(roamingRoot, localRoot);
         Keys = new DesktopKeyBackend(keys ?? (roamingRoot is null
             ? NamedKeyStore.ForRoamingRoot()
             : new NamedKeyStore(roamingRoot, new KeyAssignmentStore(Path.Combine(roamingRoot, KeyAssignmentStore.Bucket)))));
@@ -42,7 +44,8 @@ public sealed class DesktopProfile : IProfile
 }
 
 /// <summary>
-/// Each app's <c>%APPDATA%\MindAttic\{AppId}\settings.json</c>. The version is a SHA-256 of the file's bytes, so any
+/// Each app's <c>%APPDATA%\MindAttic\{AppId}\settings.json</c> (or <c>%LOCALAPPDATA%</c> for a <c>Local</c>-scope
+/// manifest: the folder its manifest is discovered in). The version is a SHA-256 of the file's bytes, so any
 /// change by the app or another editor since Load is caught on Save. Save re-reads the file and writes only the changed
 /// fields into it, so values the form never touched (and properties the manifest doesn't know) stay as they are.
 /// </summary>
@@ -54,8 +57,13 @@ public sealed class DesktopSettingsBackend : ISettingsBackend
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(StringComparer.OrdinalIgnoreCase);
     private readonly string? roamingRoot;
+    private readonly string? localRoot;
 
-    public DesktopSettingsBackend(string? roamingRoot = null) => this.roamingRoot = roamingRoot;
+    public DesktopSettingsBackend(string? roamingRoot = null, string? localRoot = null)
+    {
+        this.roamingRoot = roamingRoot;
+        this.localRoot = localRoot;
+    }
 
     public string WhenAppsSeeChanges => "on the app's next start (apps that reload settings see it within seconds)";
 
@@ -69,7 +77,10 @@ public sealed class DesktopSettingsBackend : ISettingsBackend
         var file = string.IsNullOrWhiteSpace(manifest.SettingsFile) ? "settings.json" : manifest.SettingsFile;
         if (file is "." or ".." || Path.GetFileName(file) != file || file.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             throw new InvalidOperationException($"{id}'s manifest names a settings file outside its folder.");
-        return Path.Combine(roamingRoot ?? VaultPaths.RoamingRoot, id, file);
+        var root = string.Equals(manifest.Scope, SettingsManifest.LocalScope, StringComparison.OrdinalIgnoreCase)
+            ? localRoot ?? VaultPaths.LocalRoot
+            : roamingRoot ?? VaultPaths.RoamingRoot;
+        return Path.Combine(root, id, file);
     }
 
     public async Task<SettingsDocument> LoadAsync(SettingsManifest manifest, CancellationToken cancellationToken = default)

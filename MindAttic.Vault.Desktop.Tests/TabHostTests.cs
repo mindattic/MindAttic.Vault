@@ -144,6 +144,22 @@ public sealed class TabHostTests
         Assert.That(azure.SettingsStore.Loads, Is.Zero);
     }
 
+    [Test]
+    public async Task A_Local_scope_manifest_gets_a_tab_and_is_watched_too()
+    {
+        var ui = new InlineDispatcher();
+        using var catalog = new FileManifestCatalog(debounce: TimeSpan.FromMilliseconds(50));
+        var vm = Samples.Main(catalog, Samples.Context(ui: ui, localRoot: sandbox.Local), new FakeKeyTester(), new DesktopProfile());
+        await vm.InitializeAsync();
+
+        var dir = Samples.Install<GammaSettings>(sandbox.Local);
+        await WaitFor(ui, () => vm.AppTabs.Any(t => t.AppId == "Gamma" && t.Document is not null));
+        Assert.That(vm.AppTabs.Single(t => t.AppId == "Gamma").Document!["size"]!.GetValue<int>(), Is.EqualTo(48));
+
+        Directory.Delete(dir, recursive: true);
+        await WaitFor(ui, () => !AppIds(vm).Contains("Gamma"));
+    }
+
     internal static async Task WaitFor(InlineDispatcher ui, Func<bool> condition, int timeoutMs = 10000)
     {
         var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);

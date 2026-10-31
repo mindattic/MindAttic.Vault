@@ -135,4 +135,19 @@ public sealed class DesktopProfileTests
     [Test]
     public void When_apps_see_changes_is_plain_words() =>
         Assert.That(profile.Settings.WhenAppsSeeChanges, Does.Contain("next start"));
+
+    [Test]
+    public async Task A_Local_scope_app_reads_and_writes_its_settings_under_the_local_root()
+    {
+        var manifest = Settings.Manifest.SettingsManifestBuilder.Build<GammaSettings>();
+        Assert.That(manifest.Scope, Is.EqualTo(Settings.Manifest.SettingsManifest.LocalScope));
+        var doc = await profile.Settings.LoadAsync(manifest);
+        doc.Values["size"] = 64;
+
+        await profile.Settings.SaveAsync(manifest, doc, new[] { "MindAttic:Settings:Gamma:size" });
+
+        Assert.That(File.Exists(Path.Combine(sandbox.Local, "Gamma", "settings.json")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(sandbox.Roaming, "Gamma")), Is.False);
+        Assert.That(JsonSettingsStore<GammaSettings>.ForLocalApp("Gamma").Load().Size, Is.EqualTo(64));
+    }
 }
