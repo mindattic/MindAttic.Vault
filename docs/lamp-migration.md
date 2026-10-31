@@ -98,6 +98,22 @@ If the app already has a folder there, use that exact name.
   option builders) must carry every property; add a test that each property survives the copy.
 - **Username/password pairs** (OpenSubtitles, SMTP) stay in their existing Vault stores (`Subtitles`,
   `Notifications`); they are not named-key providers.
+- **Deployed web apps** read their settings by name from IConfiguration (App Configuration): load
+  `GetSection("MindAttic:Settings:{AppId}")` when it exists and only fall back to the local store
+  otherwise (see Cursory's `CursorySettings.Load`). `LoadOrSeed` never throws on a read-only disk.
+- **Old config keys** (`appsettings.json` sections, `Foo:Bar` keys) are imported once when the Vault file
+  doesn't exist yet, then removed from the shipped `appsettings.json` so nothing reads them twice
+  (see ProcessLogger's `ProcessLoggerOptions.Load`).
+- **Per-machine apps** (hotkeys, autostart, local databases) use `[SettingsApp(..., Local = true)]`.
+- **Apps that change behavior while running** (tray apps, services) watch their settings file and apply
+  edits live (see Unstuck's `SettingsService.Watch` + `SettingsApplier`).
+- **Shared credential groups** (`Notifications` SMTP/Twilio, `Subtitles`, `AudioStore`, broker key+secret
+  pairs) stay in their Vault buckets and are edited in Vault.Desktop's Credentials section (M.VALT-T62);
+  don't copy them into an app's settings class.
+- **NuGet:** the repo's `NuGet.config` must list `C:\LocalNuGet`; add it if missing.
+- **Elevated exes** (ETW, admin tools) can't run `--write-settings-manifest` unelevated; seed today's values
+  through the unelevated companion app or a scratch console calling the same `Load`.
+- Computed properties on a settings class need `[JsonIgnore]` or they get written into settings.json.
 - **Don't edit files with Windows PowerShell 5.1** `Get-Content`/`Set-Content`: it re-encodes UTF-8 and
   garbles non-ASCII text. Use the editor tools, PowerShell 7, or `-Encoding utf8` on both read and write.
 
