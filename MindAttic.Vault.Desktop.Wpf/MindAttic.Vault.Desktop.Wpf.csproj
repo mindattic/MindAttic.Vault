@@ -32,6 +32,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <!-- The append-only audit log (M.VALT-T53). -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
+    <!-- Microsoft.Data.Sqlite pulls native SQLite 2.1.11, which bundles SQLite < 3.50.2 (GHSA-2m69-gcr7-jv3q, memory
+         corruption). Pinned to a patched native build, as the workspace's other SQLite apps do. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
   </ItemGroup>
 
   <ItemGroup>
