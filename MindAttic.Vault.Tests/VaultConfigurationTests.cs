@@ -89,7 +89,7 @@ public sealed class VaultConfigurationTests
     public void ServiceKeysUseTheirBucketSection()
     {
         Keys().Add("elevenlabs", "home", "el");
-        Assert.That(Build()["MindAttic:Vault:Services:elevenlabs:keys:home"], Is.EqualTo("el"));
+        Assert.That(Build()["MindAttic:Vault:LLM:elevenlabs:keys:home"], Is.EqualTo("el"));
     }
 
     [Test]

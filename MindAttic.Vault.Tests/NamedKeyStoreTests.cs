@@ -51,14 +51,21 @@ public sealed class NamedKeyStoreTests
     }
 
     [Test]
-    public void Add_PersistsNameAndConsolidatesAliasesOntoCanonicalId()
+    public void Add_PersistsNameIntoTheIdAlreadyOnDisk()
     {
         WriteProviders("""{ "anthropic": { "apiKey": "old" } }""");
         store.Add("claude", "2026-10-31 IdiotProof", "new");
         var root = JsonNode.Parse(File.ReadAllText(ProvidersJson))!.AsObject();
-        Assert.That(root.ContainsKey("anthropic"), Is.False);
+        Assert.That(root.ContainsKey("claude"), Is.False);
         Assert.That(store.GetKeys("claude").Select(k => k.Name), Is.EqualTo(new[] { "key1", "2026-10-31 IdiotProof" }));
-        Assert.That(root["claude"]!["apiKey"]!.GetValue<string>(), Is.EqualTo("old"), "first key stays the single-key mirror");
+        Assert.That(root["anthropic"]!["apiKey"]!.GetValue<string>(), Is.EqualTo("old"), "first key stays the single-key mirror");
+    }
+
+    [Test]
+    public void Add_ForANewProvider_UsesTheCanonicalId()
+    {
+        store.Add("anthropic", "first", "v");
+        Assert.That(JsonNode.Parse(File.ReadAllText(ProvidersJson))!.AsObject().ContainsKey("claude"), Is.True);
     }
 
     [Test]
@@ -155,11 +162,54 @@ public sealed class NamedKeyStoreTests
     }
 
     [Test]
-    public void NonLlmProvidersUseTheirBucket()
+    public void ServiceKeysShareTheLlmBucketWhereTheyAreToday()
     {
-        store.Add("elevenlabs", "home", "el-1");
-        Assert.That(File.Exists(tmp.Combine("Services", "providers.json")), Is.True);
+        WriteProviders("""{ "elevenlabs": { "type": "bearer", "apiKey": "el-1" } }""");
         Assert.That(store.GetKeys("elevenlabs").Single().Value, Is.EqualTo("el-1"));
+    }
+
+    [Test]
+    public void AliasEntriesOnDisk_AreKeptAndMirroredSoOldReadersSeeTheSameKeys()
+    {
+        WriteProviders("""{ "xai": { "type": "bearer", "apiKey": "x-1" } }""");
+        store.Add("grok", "second", "x-2");
+        store.SetDisabled("grok", "key1", true);
+        var llm = new LlmCredentialStore(tmp.Combine("LLM"));
+        Assert.That(llm.GetKey("xai"), Is.EqualTo("x-2"), "app still reading xai follows the list");
+        Assert.That(llm.LoadAllRaw().ContainsKey("grok"), Is.False, "no new id is invented when an alias already holds the keys");
+        Assert.That(store.GetKeys("grok").Select(k => k.Name), Is.EqualTo(new[] { "key1", "second" }));
+    }
+
+    [Test]
+    public void BothCanonicalAndAliasOnDisk_BothGetTheMergedList()
+    {
+        WriteProviders("""{ "claude": { "apiKey": "a" }, "anthropic": { "apiKey": "b" } }""");
+        store.Rename("claude", "key2", "Team");
+        var llm = new LlmCredentialStore(tmp.Combine("LLM"));
+        Assert.That(llm.GetKeys("claude").Select(k => k.Label), Is.EqualTo(new[] { "key1", "Team" }));
+        Assert.That(llm.GetKeys("anthropic").Select(k => k.Label), Is.EqualTo(new[] { "key1", "Team" }));
+        Assert.That(store.GetKeys("claude").Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void KeyOverrideFile_LeadsTheListAndIsFoldedInOnFirstEdit()
+    {
+        WriteProviders("""{ "fal": { "apiKey": "pool-1" } }""");
+        File.WriteAllText(tmp.Combine("LLM", "fal.key"), "file-key\n");
+        Assert.That(store.GetKeys("fal").Select(k => k.Value), Is.EqualTo(new[] { "file-key", "pool-1" }));
+        store.Add("fal", "extra", "pool-2");
+        Assert.That(File.Exists(tmp.Combine("LLM", "fal.key")), Is.False);
+        Assert.That(File.ReadAllText(tmp.Combine("LLM", "fal.key.imported")).Trim(), Is.EqualTo("file-key"));
+        Assert.That(new LlmCredentialStore(tmp.Combine("LLM")).GetKey("fal"), Is.EqualTo("file-key"), "apps keep reading the same key");
+        Assert.That(store.GetKeys("fal").Select(k => k.Value), Is.EqualTo(new[] { "file-key", "pool-1", "pool-2" }));
+    }
+
+    [Test]
+    public void KeyFileOnlyProvider_IsListed()
+    {
+        Directory.CreateDirectory(tmp.Combine("LLM"));
+        File.WriteAllText(tmp.Combine("LLM", "ideogram.key"), "i-1");
+        Assert.That(store.ProvidersWithKeys(), Does.Contain("ideogram"));
     }
 
     [Test]

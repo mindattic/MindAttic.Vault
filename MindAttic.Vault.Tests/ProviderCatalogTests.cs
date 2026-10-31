@@ -39,7 +39,7 @@ public sealed class ProviderCatalogTests
     public void NonLlmProvidersUseTheirOwnBuckets()
     {
         Assert.That(ProviderCatalog.Get("alpaca").Bucket, Is.EqualTo(BrokerCredentialStore.Bucket));
-        Assert.That(ProviderCatalog.Get("elevenlabs").Bucket, Is.EqualTo(ProviderCatalog.ServicesBucket));
+        Assert.That(ProviderCatalog.Get("elevenlabs").Bucket, Is.EqualTo(LlmCredentialStore.Bucket), "every non-broker API key lives in the LLM bucket, where they are today");
         Assert.That(ProviderCatalog.Get("jellyfin").Category, Is.EqualTo(ProviderCategory.Media));
     }
 

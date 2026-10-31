@@ -78,8 +78,13 @@ public sealed class NamedKeyStore
         var store = StoreFor(info.Id);
         var entries = new List<CredentialPoolEntry>();
         foreach (var id in ProviderCatalog.IdsFor(info.Id))
-            foreach (var e in store.GetKeys(id))
+        {
+            // An override file is what apps read today, so it leads; the pool it was shadowing follows.
+            if (store.GetOverrideKey(id) is { } overrideKey && !entries.Any(x => x.Key == overrideKey))
+                entries.Add(new CredentialPoolEntry(overrideKey));
+            foreach (var e in store.GetPoolKeys(id))
                 if (!entries.Any(x => x.Key == e.Key)) entries.Add(e);
+        }
         return Name(entries);
     }
 
@@ -91,14 +96,17 @@ public sealed class NamedKeyStore
     public IReadOnlyList<string> ProvidersWithKeys()
     {
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var bucket in new[] { LlmCredentialStore.Bucket, BrokerCredentialStore.Bucket, ProviderCatalog.ServicesBucket })
+        foreach (var bucket in new[] { LlmCredentialStore.Bucket, BrokerCredentialStore.Bucket })
         {
             var dir = Path.Combine(roamingRoot, bucket);
             if (!System.IO.Directory.Exists(dir)) continue;
-            foreach (var id in new CredentialStore(dir).LoadAllRaw().Keys)
+            var stored = new CredentialStore(dir).LoadAllRaw().Keys
+                .Concat(System.IO.Directory.EnumerateFiles(dir, "*" + CredentialStore.KeyFileExtension).Select(Path.GetFileNameWithoutExtension));
+            foreach (var id in stored)
             {
+                if (string.IsNullOrWhiteSpace(id)) continue;
                 var canonical = ProviderCatalog.Normalize(id);
-                if (GetKeys(canonical).Count > 0) ids.Add(canonical);
+                if (ProviderCatalog.Get(canonical).Bucket == bucket && GetKeys(canonical).Count > 0) ids.Add(canonical);
             }
         }
         return ids.OrderBy(i => i, StringComparer.OrdinalIgnoreCase).ToList();
@@ -216,15 +224,22 @@ public sealed class NamedKeyStore
     {
         var info = ProviderCatalog.Get(providerId);
         var store = StoreFor(info.Id);
-        store.SetKeys(info.Id, keys.Select(k => new CredentialPoolEntry(k.Value, k.Name, k.Disabled)).ToList());
+        var pool = keys.Select(k => new CredentialPoolEntry(k.Value, k.Name, k.Disabled)).ToList();
 
-        // Alias entries were merged into the canonical list on read; drop them so they can't diverge.
+        // Every id that already holds this provider's keys gets the same list, so an app still reading
+        // an alias (xai, anthropic) sees exactly what one reading the canonical id sees.
         var raw = store.LoadAllRaw();
-        var aliases = info.Aliases.Where(a => raw.ContainsKey(a)).ToList();
-        if (aliases.Count > 0)
+        var ids = ProviderCatalog.IdsFor(info.Id)
+            .Where(id => raw.ContainsKey(id) || store.GetOverrideKey(id) is not null)
+            .ToList();
+        if (ids.Count == 0) ids.Add(info.Id);
+        foreach (var id in ids)
         {
-            foreach (var a in aliases) raw.Remove(a);
-            store.SaveAllRaw(raw);
+            store.SetKeys(id, pool);
+            // The override file's key now leads the pool; retire the file so edits take effect.
+            var keyFile = Path.Combine(store.Directory, id + CredentialStore.KeyFileExtension);
+            if (File.Exists(keyFile))
+                File.Move(keyFile, keyFile + ".imported", overwrite: true);
         }
     }
 

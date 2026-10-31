@@ -59,7 +59,7 @@ public sealed class VaultConfigurationSource : IConfigurationSource
 
 internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDisposable
 {
-    private static readonly string[] KeyBuckets = { LlmCredentialStore.Bucket, BrokerCredentialStore.Bucket, ProviderCatalog.ServicesBucket };
+    private static readonly string[] KeyBuckets = { LlmCredentialStore.Bucket, BrokerCredentialStore.Bucket };
     private readonly VaultConfigurationSource source;
     private readonly object gate = new();
     private FileSystemWatcher? watcher;

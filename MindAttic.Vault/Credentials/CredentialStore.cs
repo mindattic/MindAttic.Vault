@@ -92,13 +92,26 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
 
         // 1. Per-provider .key file (highest priority — manual override). Always a
         // single-key "pool" — there's no multi-key syntax for this override file.
+        var overrideKey = GetOverrideKey(providerId);
+        if (overrideKey is not null) return new[] { new CredentialPoolEntry(overrideKey) };
+        return GetPoolKeys(providerId);
+    }
+
+    /// <summary>The <c>&lt;providerId&gt;.key</c> override file's key, or null when there is none.</summary>
+    public string? GetOverrideKey(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId) || !System.IO.Directory.Exists(Directory)) return null;
         var keyFile = Path.Combine(Directory, providerId + KeyFileExtension);
-        if (File.Exists(keyFile))
-        {
-            var raw = ReadFileSafe(keyFile);
-            if (!string.IsNullOrWhiteSpace(raw))
-                return new[] { new CredentialPoolEntry(raw.Trim()) };
-        }
+        if (!File.Exists(keyFile)) return null;
+        var raw = ReadFileSafe(keyFile);
+        return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+    }
+
+    /// <summary>The pool from <c>providers.json</c> (or legacy <c>credentials.json</c>), ignoring any <c>.key</c> override.</summary>
+    public IReadOnlyList<CredentialPoolEntry> GetPoolKeys(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return Array.Empty<CredentialPoolEntry>();
+        if (!System.IO.Directory.Exists(Directory)) return Array.Empty<CredentialPoolEntry>();
 
         // 2. providers.json (canonical rich format) — the "apiKeys" pool array when
         // present, else the single "apiKey" field wrapped as a one-element pool.

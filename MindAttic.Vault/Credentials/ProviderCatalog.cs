@@ -1,4 +1,4 @@
-namespace MindAttic.Vault.Credentials;
+﻿namespace MindAttic.Vault.Credentials;
 
 /// <summary>What kind of service a provider is; Vault.Desktop's Keys tab groups by it.</summary>
 public enum ProviderCategory { Llm, Broker, Media, Tts, Other }
@@ -7,7 +7,7 @@ public enum ProviderCategory { Llm, Broker, Media, Tts, Other }
 /// <param name="Id">Canonical lowercase id (e.g. <c>claude</c>).</param>
 /// <param name="DisplayName">Name shown in the UI.</param>
 /// <param name="Category">Grouping on the Keys tab.</param>
-/// <param name="Bucket">Credential bucket folder under <c>%APPDATA%\MindAttic\</c> holding its keys.</param>
+/// <param name="Bucket">Credential bucket folder under <c>%APPDATA%\MindAttic\</c> holding its keys (LLM for every API key except brokers).</param>
 /// <param name="KeyPageUrl">Where to get a key, or null.</param>
 /// <param name="Aliases">Other ids that mean the same provider (merged on read).</param>
 public sealed record ProviderInfo(
@@ -25,9 +25,6 @@ public sealed record ProviderInfo(
 /// </summary>
 public static class ProviderCatalog
 {
-    /// <summary>Bucket for non-LLM, non-broker service keys (TTS, media servers).</summary>
-    public const string ServicesBucket = "Services";
-
     /// <summary>Every known provider.</summary>
     public static IReadOnlyList<ProviderInfo> All { get; } = new ProviderInfo[]
     {
@@ -43,9 +40,15 @@ public static class ProviderCatalog
         new("cohere",     "Cohere",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://dashboard.cohere.com/api-keys", Array.Empty<string>()),
         new("openrouter", "OpenRouter", ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://openrouter.ai/keys", Array.Empty<string>()),
         new("ollama",     "Ollama",     ProviderCategory.Llm,    LlmCredentialStore.Bucket, null, Array.Empty<string>()),
+        new("together",   "Together",   ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://api.together.ai/settings/api-keys", Array.Empty<string>()),
+        new("fireworks",  "Fireworks",  ProviderCategory.Llm,    LlmCredentialStore.Bucket, "https://fireworks.ai/account/api-keys", Array.Empty<string>()),
+        new("fal",        "fal",        ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://fal.ai/dashboard/keys", Array.Empty<string>()),
+        new("ideogram",   "Ideogram",   ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://ideogram.ai/manage-api", Array.Empty<string>()),
+        new("google-maps","Google Maps",ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://console.cloud.google.com/google/maps-apis/credentials", Array.Empty<string>()),
+        new("here-maps",  "HERE Maps",  ProviderCategory.Other,  LlmCredentialStore.Bucket, "https://platform.here.com/admin/apps", Array.Empty<string>()),
         new("alpaca",     "Alpaca",     ProviderCategory.Broker, BrokerCredentialStore.Bucket, "https://app.alpaca.markets/paper/dashboard/overview", Array.Empty<string>()),
-        new("elevenlabs", "ElevenLabs", ProviderCategory.Tts,    ServicesBucket, "https://elevenlabs.io/app/settings/api-keys", Array.Empty<string>()),
-        new("jellyfin",   "Jellyfin",   ProviderCategory.Media,  ServicesBucket, null, Array.Empty<string>()),
+        new("elevenlabs", "ElevenLabs", ProviderCategory.Tts,    LlmCredentialStore.Bucket, "https://elevenlabs.io/app/settings/api-keys", Array.Empty<string>()),
+        new("jellyfin",   "Jellyfin",   ProviderCategory.Media,  LlmCredentialStore.Bucket, null, Array.Empty<string>()),
     };
 
     private static readonly Dictionary<string, ProviderInfo> ById = BuildIndex();
