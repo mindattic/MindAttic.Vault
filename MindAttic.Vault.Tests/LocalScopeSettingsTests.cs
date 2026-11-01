@@ -87,4 +87,21 @@ public sealed class LocalScopeSettingsTests
         Assert.That(config["MindAttic:Settings:MachineApp:hotkey"], Is.EqualTo("Ctrl+Alt+U"));
         Assert.That(config["MindAttic:Settings:SomeCache:x"], Is.Null);
     }
+
+    [Test]
+    public async Task VaultConfiguration_ReloadOnChange_PicksUpALocalAppsSavedSettings()
+    {
+        // M.VALT-T74: a per-machine app's settings.json lives under the local root, outside the roaming root's watcher.
+        Directory.CreateDirectory(tmp.Combine("roaming"));
+        var store = JsonSettingsStore<MachineSettings>.ForSettingsApp();
+        store.Save(new MachineSettings { Hotkey = "Ctrl+1" });
+        store.LoadOrSeed();
+        var config = new ConfigurationBuilder().AddMindAtticVaultConfiguration(o => o.ReloadOnChange = true).Build();
+        Assert.That(config["MindAttic:Settings:MachineApp:hotkey"], Is.EqualTo("Ctrl+1"));
+
+        store.Save(new MachineSettings { Hotkey = "Ctrl+2" });
+        for (var i = 0; i < 50 && config["MindAttic:Settings:MachineApp:hotkey"] != "Ctrl+2"; i++) await Task.Delay(100);
+        Assert.That(config["MindAttic:Settings:MachineApp:hotkey"], Is.EqualTo("Ctrl+2"));
+        (config as IDisposable)?.Dispose();
+    }
 }

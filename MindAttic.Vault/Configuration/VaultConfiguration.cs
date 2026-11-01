@@ -66,7 +66,8 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
     private static readonly string[] KeyBuckets = { LlmCredentialStore.Bucket, BrokerCredentialStore.Bucket };
     private readonly VaultConfigurationSource source;
     private readonly object gate = new();
-    private FileSystemWatcher? watcher;
+    private readonly List<FileSystemWatcher> watchers = new();
+    private bool watching;
     private Timer? debounce;
     private bool disposed;
 
@@ -84,7 +85,7 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
         }
         if (Directory.Exists(source.EffectiveLocalRoot)) LoadSettings(source.EffectiveLocalRoot, data, localOnly: true);
         Data = data;
-        if (source.ReloadOnChange) EnsureWatcher(root);
+        if (source.ReloadOnChange) EnsureWatchers(root, source.EffectiveLocalRoot);
     }
 
     private static void LoadSettings(string root, IDictionary<string, string?> data, bool localOnly)
@@ -153,30 +154,43 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
         catch { return Array.Empty<string>(); }
     }
 
-    private void EnsureWatcher(string root)
+    // Both roots: per-machine apps keep settings.json under the local root (M.VALT-T74), so a save there reloads too.
+    // The local root also holds unrelated caches, so its watcher only looks at settings.json files.
+    private void EnsureWatchers(string root, string localRoot)
     {
         lock (gate)
         {
-            if (disposed || watcher is not null || !Directory.Exists(root)) return;
-            try
+            if (disposed || watching) return;
+            watching = true;
+            AddWatcher(root, filter: null);
+            if (!string.Equals(Path.GetFullPath(localRoot), Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+                AddWatcher(localRoot, filter: "settings.json");
+        }
+    }
+
+    private void AddWatcher(string dir, string? filter)
+    {
+        if (!Directory.Exists(dir)) return;
+        FileSystemWatcher? watcher = null;
+        try
+        {
+            watcher = new FileSystemWatcher(dir)
             {
-                watcher = new FileSystemWatcher(root)
-                {
-                    IncludeSubdirectories = true,
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                };
-                FileSystemEventHandler changed = (_, e) => { if (IsRelevant(e.FullPath)) Schedule(); };
-                watcher.Changed += changed;
-                watcher.Created += changed;
-                watcher.Deleted += changed;
-                watcher.Renamed += (_, e) => { if (IsRelevant(e.FullPath) || IsRelevant(e.OldFullPath)) Schedule(); };
-                watcher.EnableRaisingEvents = true;
-            }
-            catch
-            {
-                watcher?.Dispose();
-                watcher = null;
-            }
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+            };
+            if (filter is not null) watcher.Filter = filter;
+            FileSystemEventHandler changed = (_, e) => { if (IsRelevant(e.FullPath)) Schedule(); };
+            watcher.Changed += changed;
+            watcher.Created += changed;
+            watcher.Deleted += changed;
+            watcher.Renamed += (_, e) => { if (IsRelevant(e.FullPath) || IsRelevant(e.OldFullPath)) Schedule(); };
+            watcher.EnableRaisingEvents = true;
+            watchers.Add(watcher);
+        }
+        catch
+        {
+            watcher?.Dispose();
         }
     }
 
@@ -210,7 +224,8 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
         {
             disposed = true;
             debounce?.Dispose();
-            watcher?.Dispose();
+            foreach (var w in watchers) w.Dispose();
+            watchers.Clear();
         }
     }
 }
