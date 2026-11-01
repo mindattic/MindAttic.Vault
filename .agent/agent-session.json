@@ -1,0 +1,21 @@
+﻿{
+    "protocolVersion":  "1.2",
+    "code":  "loyal-minks",
+    "updatedAt":  "2026-10-31T21:57:38.3378608Z",
+    "savedBy":  "shampoo1232@mindattic.com",
+    "repo":  {
+                 "name":  "MindAttic.Vault",
+                 "path":  "D:\\Projects\\MindAttic\\MindAttic.Vault",
+                 "worktree":  false,
+                 "mainRepo":  "D:\\Projects\\MindAttic\\MindAttic.Vault",
+                 "branch":  "main"
+             },
+    "task":  "Finish LAMP (MindAttic.Vault RFC 0003, M.VALT-T35): close the final check M.VALT-T57 once the user has restarted MindAttic.Orchestrator.Desktop.Wpf and confirmed every app works the same; then act on whichever open items the user approves.",
+    "decisions":  "Every app migration is done, committed and pushed, apart from Cursory (its GitHub repo is archived; 2 commits CUR-T19 are local). Final names: settings MindAttic:Settings:{AppId}:{prop}; keys MindAttic:Vault:LLM:{provider}:keys:{name}; assignments MindAttic:Vault:Assignments:{AppId}:{provider}:{i}. Vault 7.0.0 and Authentication 7.0.0 were repacked to C:\\LocalNuGet at 16:25. Vault.Desktop is installed at %LOCALAPPDATA%\\MindAttic\\Vault.Desktop (equal-width tabs, M.VALT-T64). Codex sandbox ACL fix applied with the user\u0027s approval (M.VALT-T68 closed). Never restart or redeploy the Orchestrator yourself: it wipes every CLI; the user does it. Leave M.TIX-T169\u0027s uncommitted Tickets fix alone unless asked. Rules: tickets first, main only, commit by path with (TICKET-ID), NUnit only, no PS 5.1 Set-Content edits.",
+    "state":  "All suites pass: about 52k .NET tests plus python/Pester/Playwright. Two known non-LAMP failures remain: PRS-T831, a data duplicate in Prose; M.ORCH-T1312, timing flakes under load. The ecosystem suite MindAttic.Vault.Ecosystem.Tests passes 414/414. 13 apps verified by real cog clicks (Unstuck redeployed and clicked); Prose only by a direct VaultSettings.Open call, since its Hub on port 5900 runs the old Oct 30 build. Since the last summary, fixed and closed: PRS-T830, M.LNCH-T95, M.ORCH-T1311, M.VALT-T64/T68/T69/T70, M.AUTH-T25, M.CAPT-T84, PRS-T832, TT-T28, M.COMP-T160. Open, waiting on the user: M.VALT-T57 (restart), PRS-T831, IP-T348 (Alpaca credential row), M.ORCH-T1312, TRC-T30, M.LNCH-T96 (Codex key, billing impact), M.VALT-T63 (Azure write approval), Cursory unarchive/push, Prose Hub redeploy. M.VALT-T67 is open with results notes.",
+    "next":  "1. Ask the user whether they have restarted Orchestrator (run.ps1 once all CLIs are idle) and whether its cog opens Vault on \"MindAttic Orchestrator\"; if yes, close M.VALT-T57 and M.VALT-T67 with refs. 2. If the user approves: unarchive Cursory with gh repo unarchive mindattic/Cursory, then git -C Cursory push. 3. After the user redeploys the Prose Hub, real-click its Writer cog using scratchpad\\verify\\uia.ps1. 4. Act on whichever of PRS-T831, IP-T348, M.ORCH-T1312, TRC-T30, M.LNCH-T96 and M.VALT-T63 the user decides.",
+    "queued":  [
+
+               ],
+    "universe":  ""
+}
