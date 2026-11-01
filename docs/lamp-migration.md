@@ -104,6 +104,10 @@ If the app already has a folder there, use that exact name.
 - **Old config keys** (`appsettings.json` sections, `Foo:Bar` keys) are imported once when the Vault file
   doesn't exist yet, then removed from the shipped `appsettings.json` so nothing reads them twice
   (see ProcessLogger's `ProcessLoggerOptions.Load`).
+- **Global default, app override** (M.VALT-T77): Global (`MindAtticGlobalSettings`) holds exactly the values every app
+  should reach: theme, workspace root and alert recipient. An app's own copy of one is an optional override: blank
+  follows Global, set wins. Resolve it with `MindAtticGlobalSettings.Resolve(appValue, g => g.AlertRecipient)` (see
+  the Orchestrator's `psstAlertTo` and `workspaceRoot`).
 - **Per-machine apps** (hotkeys, autostart, local databases) use `[SettingsApp(..., Local = true)]`.
 - **Apps that change behavior while running** (tray apps, services) watch their settings file and apply
   edits live (see Unstuck's `SettingsService.Watch` + `SettingsApplier`).
