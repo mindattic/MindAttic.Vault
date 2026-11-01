@@ -28,9 +28,37 @@ public sealed class TabHostTests
 
         await vm.InitializeAsync();
 
-        Assert.That(AppIds(vm), Is.EqualTo(new[] { "Global", "Beta", "Alpha" }));
+        Assert.That(AppIds(vm), Is.EqualTo(new[] { "Global", "Alpha", "Beta" }), "app tabs A-Z by title, not discovery order (M.VALT-T79)");
         Assert.That(catalog.Started, Is.True);
         Assert.That(vm.SelectedTab, Is.SameAs(vm.GetStarted), "Alpha's required Claude key is missing, so Get Started is first");
+    }
+
+    [Test]
+    public async Task App_tabs_read_A_to_Z_by_title_ignoring_case_after_Global()
+    {
+        // M.VALT-T79: alphabetical left to right, top to bottom; whatever order the folders are discovered in.
+        static MindAttic.Vault.Settings.Manifest.SettingsManifest Named(string id, string title)
+        {
+            var m = Samples.Alpha;
+            m.AppId = id;
+            m.DisplayName = title;
+            return m;
+        }
+        var catalog = new FakeCatalog
+        {
+            Manifests =
+            {
+                Named("UnstuckTaskbar", "Unstuck"), Named("Orchestrator", "MindAttic.Orchestrator"), Named("Prose", "Prose"),
+                Named("Automata", "Automata"), Named("MindAttic.Browser", "MindAttic.Browser"), Named("zeta", "zeta"),
+            },
+        };
+        var vm = Samples.Shell(catalog, Samples.Context(localRoot: sandbox.Local), new FakeProfile("Desktop"));
+        await vm.InitializeAsync();
+
+        Assert.That(vm.AppTabs.Select(t => t.AppId).ToArray(), Is.EqualTo(new[]
+        {
+            "Global", "Automata", "MindAttic.Browser", "Orchestrator", "Prose", "UnstuckTaskbar", "zeta",
+        }));
     }
 
     [Test]

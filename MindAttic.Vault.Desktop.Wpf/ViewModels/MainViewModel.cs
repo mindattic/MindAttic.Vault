@@ -266,7 +266,11 @@ public sealed class MainViewModel : ObservableObject
 
         var global = manifests.FirstOrDefault(m => string.Equals(m.AppId, LampNames.GlobalApp, StringComparison.OrdinalIgnoreCase))
                      ?? SettingsManifestBuilder.Build<MindAtticGlobalSettings>();
-        var apps = manifests.Where(m => !ReferenceEquals(m, global) && !string.Equals(m.AppId, LampNames.GlobalApp, StringComparison.OrdinalIgnoreCase));
+        // App tabs read A-Z by their title (the repo name), left to right and wrapping top to bottom, after the fixed tabs and
+        // Global (M.VALT-T79); discovery order (folders on disk) meant nothing to the user.
+        var apps = manifests.Where(m => !ReferenceEquals(m, global) && !string.Equals(m.AppId, LampNames.GlobalApp, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(m => string.IsNullOrWhiteSpace(m.DisplayName) ? m.AppId : m.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(m => m.AppId, StringComparer.OrdinalIgnoreCase);
 
         // Whether Get Started shows depends on the required providers and their keys: decide before syncing.
         if (profile is not null) await LoadTabAsync(GetStarted).ConfigureAwait(true);
