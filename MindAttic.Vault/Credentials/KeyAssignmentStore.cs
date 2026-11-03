@@ -90,7 +90,10 @@ public sealed class KeyAssignmentStore
         });
     }
 
-    private Dictionary<string, Dictionary<string, List<string>>> Read()
+    // forWrite: Mutate rewrites the whole file from this map, so an existing file that can't be read
+    // (locked by another process's swap, access denied) throws instead of reading as empty, which would
+    // otherwise drop every other app's assignments on the write.
+    private Dictionary<string, Dictionary<string, List<string>>> Read(bool forWrite = false)
     {
         var result = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.OrdinalIgnoreCase);
         try
@@ -114,6 +117,7 @@ public sealed class KeyAssignmentStore
                 if (map.Count > 0) result[app] = map;
             }
         }
+        catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch
         {
             // Unreadable assignments fall back to every app using the shared order.
@@ -125,7 +129,7 @@ public sealed class KeyAssignmentStore
     {
         lock (gate)
         {
-            var all = Read();
+            var all = Read(forWrite: true);
             change(all);
             var root = new JsonObject();
             foreach (var (app, byProvider) in all.OrderBy(a => a.Key, StringComparer.OrdinalIgnoreCase))

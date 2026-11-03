@@ -42,7 +42,8 @@ public sealed class AlertDispatcher
     {
         try
         {
-            var verb = e.Status == ProviderStatus.Healthy ? "RECOVERED" : "is DOWN";
+            // Alerts fire only on entering or leaving Down, so any other status (Healthy or Degraded) is a recovery.
+            var verb = e.Status == ProviderStatus.Down ? "is DOWN" : "RECOVERED";
             using var msg = new MailMessage
             {
                 From = new MailAddress(email.From),

@@ -264,7 +264,11 @@ public sealed class DesktopCredentialGroupBackend : ICredentialGroupBackend
 
     private static JsonObject? Parse(byte[] bytes)
     {
-        try { return JsonNode.Parse(bytes) as JsonObject; }
+        // Strip a UTF-8 BOM (the file stores read it fine via ReadAllText); the byte parser rejects it, which would
+        // show the group empty and let a save replace every stored credential with just the edited ones.
+        ReadOnlySpan<byte> json = bytes;
+        if (json.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF])) json = json[3..];
+        try { return JsonNode.Parse(json) as JsonObject; }
         catch (JsonException) { return null; }
     }
 

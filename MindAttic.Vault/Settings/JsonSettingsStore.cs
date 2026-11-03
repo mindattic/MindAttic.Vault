@@ -121,7 +121,12 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
     /// create the directory.
     /// </summary>
     /// <returns>The deserialized settings, or a fresh <c>new T()</c> on any failure.</returns>
-    public T Load()
+    public T Load() => Read(forWrite: false);
+
+    // forWrite: Update saves what this returns over the file, so an existing file that can't be read
+    // (locked by another process's swap, access denied) throws instead of reading as defaults, which
+    // would otherwise overwrite the user's saved settings with defaults plus the one mutation.
+    private T Read(bool forWrite)
     {
         if (!File.Exists(FilePath)) return new T();
 
@@ -132,6 +137,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
             if (string.IsNullOrWhiteSpace(json)) return new T();
             return JsonSerializer.Deserialize<T>(json, jsonOptions) ?? new T();
         }
+        catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch
         {
             // Swallow: a malformed settings file should never crash the host.
@@ -163,7 +169,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
         writeLock.Wait();
         try
         {
-            if (File.Exists(FilePath)) result = Load();
+            if (File.Exists(FilePath)) result = Read(forWrite: false);
             else
             {
                 result = new T();
@@ -314,7 +320,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
         writeLock.Wait();
         try
         {
-            var settings = Load();
+            var settings = Read(forWrite: true);
             mutate(settings);
             SaveLocked(settings);
             return settings;
@@ -350,6 +356,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
     // Logic mirrors LoadAsync exactly; extracted purely to avoid pulling the
     // public LoadAsync's cancellation-precondition into the locked critical section
     // (where it would already have thrown).
+    // Unlike LoadAsync, an existing file that can't be read throws (see Read(bool forWrite)).
     private async Task<T> LoadAsyncLocked(CancellationToken cancellationToken)
     {
         if (!File.Exists(FilePath)) return new T();
@@ -360,6 +367,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
             return JsonSerializer.Deserialize<T>(json, jsonOptions) ?? new T();
         }
         catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch { return new T(); }
     }
 }

@@ -155,7 +155,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
             // Read-modify-write: pull the current map, splice in the new primary
             // apiKey (subclasses get to decide how the splice handles their richer
             // schema) then layer the full pool on top, then atomically replace the file.
-            var providers = LoadProvidersRawSafe();
+            var providers = LoadProvidersRawSafe(forWrite: true);
             var existingJson = providers.TryGetValue(providerId, out var existing) ? existing : null;
             var primaryKey = pool.FirstOrDefault(k => !k.Disabled)?.Key ?? "";
             var withPrimary = MergeApiKeyIntoProviderJson(existingJson, providerId, primaryKey);
@@ -229,7 +229,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         if (string.IsNullOrWhiteSpace(providerId)) return;
         lock (writeLock)
         {
-            var providers = LoadProvidersRawSafe();
+            var providers = LoadProvidersRawSafe(forWrite: true);
             // Empty payload normalised to {} so the on-disk file is always valid JSON.
             providers[providerId] = string.IsNullOrWhiteSpace(rawProviderJson) ? "{}" : rawProviderJson;
             System.IO.Directory.CreateDirectory(Directory);
@@ -242,8 +242,11 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
     /// <summary>
     /// Reads <c>providers.json</c> and returns each provider entry as raw JSON text.
     /// Returns an empty map (not an exception) for missing/malformed files.
+    /// <paramref name="forWrite"/>: the caller is about to rewrite the whole file from this map, so a
+    /// file that exists but can't be read (locked mid-swap by another process, access denied) throws
+    /// instead of reading as empty, which would otherwise drop every other provider's keys on the write.
     /// </summary>
-    private Dictionary<string, string> LoadProvidersRawSafe()
+    private Dictionary<string, string> LoadProvidersRawSafe(bool forWrite = false)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
@@ -265,6 +268,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
                 result[prop.Name] = prop.Value.GetRawText();
             }
         }
+        catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch { /* swallow — missing/malformed file means "no credentials". */ }
         return result;
     }

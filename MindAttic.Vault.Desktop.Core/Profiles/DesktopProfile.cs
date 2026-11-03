@@ -139,7 +139,11 @@ public sealed class DesktopSettingsBackend : ISettingsBackend
 
     private static JsonObject? Parse(byte[] bytes)
     {
-        try { return JsonNode.Parse(bytes) as JsonObject; }
+        // A UTF-8 BOM (PowerShell 5.1's utf8 encoding writes one) is not valid JSON to the byte parser; without
+        // stripping it the file reads as defaults here and SaveAsync rebuilds it from only the changed fields.
+        ReadOnlySpan<byte> json = bytes;
+        if (json.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF])) json = json[3..];
+        try { return JsonNode.Parse(json) as JsonObject; }
         catch (JsonException) { return null; }
     }
 

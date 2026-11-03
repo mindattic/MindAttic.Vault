@@ -117,8 +117,10 @@ public sealed class TokenStore
         finally { writeLock.Release(); }
     }
 
-    // Caller owns writeLock.
-    private Dictionary<string, string> LoadAllLocked()
+    // Caller owns writeLock. forWrite: the caller rewrites the whole file from this map, so an existing
+    // file that can't be read (locked by another process's swap, access denied) throws instead of reading
+    // as empty, which would otherwise drop every other token on the write.
+    private Dictionary<string, string> LoadAllLocked(bool forWrite = false)
     {
         if (!File.Exists(TokensFilePath))
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -127,10 +129,11 @@ public sealed class TokenStore
             var raw = File.ReadAllText(TokensFilePath);
             return ParseTokensSafe(raw);
         }
+        catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
     }
 
-    private async Task<Dictionary<string, string>> LoadAllLockedAsync(CancellationToken cancellationToken)
+    private async Task<Dictionary<string, string>> LoadAllLockedAsync(CancellationToken cancellationToken, bool forWrite = false)
     {
         if (!File.Exists(TokensFilePath))
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -140,6 +143,7 @@ public sealed class TokenStore
             return ParseTokensSafe(raw);
         }
         catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
         catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
     }
 
@@ -182,7 +186,7 @@ public sealed class TokenStore
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
-            var all = LoadAllLocked();
+            var all = LoadAllLocked(forWrite: true);
             all[name] = token?.Trim() ?? "";
             WriteAll(all);
         }
@@ -204,7 +208,7 @@ public sealed class TokenStore
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
-            var all = await LoadAllLockedAsync(cancellationToken).ConfigureAwait(false);
+            var all = await LoadAllLockedAsync(cancellationToken, forWrite: true).ConfigureAwait(false);
             all[name] = token?.Trim() ?? "";
             await WriteAllAsync(all, cancellationToken).ConfigureAwait(false);
         }
@@ -223,7 +227,7 @@ public sealed class TokenStore
         writeLock.Wait();
         try
         {
-            var all = LoadAllLocked();
+            var all = LoadAllLocked(forWrite: true);
             if (!all.Remove(name)) return false;
             // Re-create the directory in case it was deleted between LoadAll and now.
             System.IO.Directory.CreateDirectory(Directory);

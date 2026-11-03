@@ -71,7 +71,13 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
             // last so they overwrite any apiKey already pulled from providers.json.
             if (Directory.Exists(bucketDir))
             {
-                foreach (var keyFile in Directory.EnumerateFiles(bucketDir, "*" + Credentials.CredentialStore.KeyFileExtension))
+                // Snapshot the listing, tolerating the folder vanishing or turning unreadable between the
+                // Exists probe and the enumeration: a throw here would escape a watcher-driven reload on a
+                // thread-pool timer thread and take the whole host process down.
+                List<string> keyFiles;
+                try { keyFiles = Directory.EnumerateFiles(bucketDir, "*" + Credentials.CredentialStore.KeyFileExtension).ToList(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { keyFiles = new List<string>(); }
+                foreach (var keyFile in keyFiles)
                 {
                     var providerId = Path.GetFileNameWithoutExtension(keyFile);
                     if (string.IsNullOrWhiteSpace(providerId)) continue;
@@ -269,7 +275,10 @@ internal sealed class MindAtticConfigurationProvider : ConfigurationProvider, ID
 
     private void Reload()
     {
-        Load();
+        // Runs on a thread-pool timer thread, where an unhandled throw kills the host; a failed
+        // re-scan keeps the last good data.
+        try { Load(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
         OnReload();
     }
 

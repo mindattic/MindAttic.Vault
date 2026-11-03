@@ -211,7 +211,10 @@ internal sealed class VaultConfigurationProvider : ConfigurationProvider, IDispo
             debounce ??= new Timer(_ =>
             {
                 lock (gate) { if (disposed) return; }
-                Load();
+                // A throw here is unhandled on a thread-pool timer thread and kills the host; a failed
+                // re-scan (a bucket folder deleted or locked mid-enumeration) keeps the last good data.
+                try { Load(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
                 OnReload();
             });
             debounce.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
