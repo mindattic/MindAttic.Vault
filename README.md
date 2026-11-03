@@ -2,7 +2,7 @@
 
 One IConfiguration-backed credentials and settings library for .NET 9 and 10: the same wiring reads API keys from a local file store on your laptop and from App Service settings or Azure Key Vault in production.
 
-[![.NET](https://img.shields.io/badge/.NET-9.0%20and%2010.0-512BD4)](MindAttic.Vault/MindAttic.Vault.csproj) [![C#](https://img.shields.io/badge/language-C%23-239120)](MindAttic.Vault) [![Version](https://img.shields.io/badge/version-5.0.0-blue)](MindAttic.Vault/MindAttic.Vault.csproj) [![Tests](https://img.shields.io/badge/tests-NUnit%204-brightgreen)](MindAttic.Vault.Tests) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-9.0%20and%2010.0-512BD4)](MindAttic.Vault/MindAttic.Vault.csproj) [![C#](https://img.shields.io/badge/language-C%23-239120)](MindAttic.Vault) [![Version](https://img.shields.io/badge/version-8.0.0-blue)](MindAttic.Vault/MindAttic.Vault.csproj) [![Tests](https://img.shields.io/badge/tests-NUnit%204-brightgreen)](MindAttic.Vault.Tests) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ```text
                     services.AddMindAtticVault(builder.Configuration)
@@ -20,7 +20,7 @@ One IConfiguration-backed credentials and settings library for .NET 9 and 10: th
      d. AddMindAtticVaultFiles()       local dev              land here)
 ```
 
-Get it: the package is `MindAttic.Vault` (current version 5.0.0, built and packed from this repo; see [Building](#building)).
+Get it: the package is `MindAttic.Vault` (current version 8.0.0, built and packed from this repo; see [Building](#building)).
 
 ## Why
 
