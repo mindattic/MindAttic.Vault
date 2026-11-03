@@ -21,7 +21,8 @@ public sealed record ProviderInfo(
 /// <summary>
 /// The one list of providers for the whole workspace. Aliases (<c>anthropic</c>, <c>google</c>,
 /// <c>xai</c>) resolve to their canonical id so their keys merge into one named list. Unknown ids
-/// pass through unchanged as their own provider in the LLM bucket.
+/// pass through unchanged as their own provider, in their family's bucket when they extend a known id
+/// (<c>alpaca-paper</c> → Broker), otherwise in the LLM bucket.
 /// </summary>
 public static class ProviderCatalog
 {
@@ -78,13 +79,38 @@ public static class ProviderCatalog
         return ById.TryGetValue(trimmed, out var p) ? p.Id : trimmed.ToLowerInvariant();
     }
 
-    /// <summary>The catalog entry, or a synthesized LLM-bucket entry for an unknown id.</summary>
+    /// <summary>
+    /// The catalog entry, or a synthesized entry for an unknown id. An unknown id in a known provider's
+    /// family (<c>&lt;known-id&gt;-...</c>, e.g. <c>alpaca-paper</c>) takes that family's category and
+    /// bucket, so a broker variant lands in the Broker bucket and its named-key lists find it; any other
+    /// unknown id is its own provider in the LLM bucket.
+    /// </summary>
     public static ProviderInfo Get(string id)
     {
         var canonical = Normalize(id);
-        return ById.TryGetValue(canonical, out var p)
-            ? p
-            : new ProviderInfo(canonical, canonical, ProviderCategory.Other, LlmCredentialStore.Bucket, null, Array.Empty<string>());
+        if (ById.TryGetValue(canonical, out var p)) return p;
+        var family = FamilyOf(canonical);
+        return family is null
+            ? new ProviderInfo(canonical, canonical, ProviderCategory.Other, LlmCredentialStore.Bucket, null, Array.Empty<string>())
+            : new ProviderInfo(canonical, canonical, family.Category, family.Bucket, family.KeyPageUrl, Array.Empty<string>());
+    }
+
+    // The known provider whose id or alias is the longest "<id>-" prefix of canonical, or null.
+    private static ProviderInfo? FamilyOf(string canonical)
+    {
+        ProviderInfo? best = null;
+        var bestLength = 0;
+        foreach (var (key, info) in ById)
+        {
+            if (key.Length > bestLength
+                && canonical.Length > key.Length + 1
+                && canonical.StartsWith(key + "-", StringComparison.OrdinalIgnoreCase))
+            {
+                best = info;
+                bestLength = key.Length;
+            }
+        }
+        return best;
     }
 
     /// <summary>True when <paramref name="id"/> is a known id or alias.</summary>

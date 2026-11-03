@@ -208,4 +208,19 @@ public class TokenStoreTests
     {
         Assert.That(TokenStore.TokensJsonFile, Is.EqualTo("tokens.json"));
     }
+
+    [Test]
+    public void Set_Over_A_Malformed_File_Copies_It_Aside_First()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "tokens.json"), "{ broken");
+        var store = new TokenStore(tmp.Path);
+
+        store.Set("github", "g");
+
+        Assert.That(store.Get("github"), Is.EqualTo("g"));
+        var aside = Directory.GetFiles(tmp.Path, "tokens.json.corrupt-*");
+        Assert.That(aside, Has.Length.EqualTo(1));
+        Assert.That(File.ReadAllText(aside[0]), Is.EqualTo("{ broken"));
+    }
 }

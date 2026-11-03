@@ -58,6 +58,10 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
     /// <summary>Absolute path to the settings file (<see cref="Directory"/> + <see cref="FileName"/>).</summary>
     public string FilePath  => Path.Combine(Directory, FileName);
 
+    // False for a file that holds a secret (FtpCredentialStore's ftp.json): a .bak would keep the
+    // replaced password on disk, as the other credential stores already avoid.
+    internal bool KeepBackup { get; init; } = true;
+
     /// <summary>Construct a settings store at <paramref name="directory"/>/<paramref name="fileName"/>.</summary>
     /// <param name="directory">Containing directory. Required. Created on first save.</param>
     /// <param name="fileName">File name. Required. Defaults to <see cref="DefaultFileName"/>.</param>
@@ -122,6 +126,50 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
     /// </summary>
     /// <returns>The deserialized settings, or a fresh <c>new T()</c> on any failure.</returns>
     public T Load() => Read(forWrite: false);
+
+    /// <inheritdoc />
+    public T LoadStrict()
+    {
+        if (!File.Exists(FilePath)) return new T();
+        // Read errors (sharing violation, access denied) propagate as they are.
+        return ParseStrict(File.ReadAllText(FilePath));
+    }
+
+    /// <inheritdoc />
+    public async Task<T> LoadStrictAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!File.Exists(FilePath)) return new T();
+        return ParseStrict(await File.ReadAllTextAsync(FilePath, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <inheritdoc />
+    public bool TryLoad(out T value)
+    {
+        try
+        {
+            value = LoadStrict();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            value = new T();
+            return false;
+        }
+    }
+
+    private T ParseStrict(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new T();
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, jsonOptions) ?? new T();
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw new InvalidDataException($"Settings file '{FilePath}' is not valid JSON for {typeof(T).Name}.", ex);
+        }
+    }
 
     // forWrite: Update saves what this returns over the file, so an existing file that can't be read
     // (locked by another process's swap, access denied) throws instead of reading as defaults, which
@@ -247,7 +295,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
         {
             File.WriteAllText(tempPath, json);
             if (File.Exists(FilePath))
-                File.Replace(tempPath, FilePath, FilePath + ".bak");
+                File.Replace(tempPath, FilePath, KeepBackup ? FilePath + ".bak" : null);
             else
                 File.Move(tempPath, FilePath);
         }
@@ -272,7 +320,7 @@ public class JsonSettingsStore<T> : ISettingsStore<T> where T : class, new()
             // File.Replace / File.Move have no async variant in BCL; the atomic
             // rename itself is sub-millisecond so cancellation isn't honored here.
             if (File.Exists(FilePath))
-                File.Replace(tempPath, FilePath, FilePath + ".bak");
+                File.Replace(tempPath, FilePath, KeepBackup ? FilePath + ".bak" : null);
             else
                 File.Move(tempPath, FilePath);
         }

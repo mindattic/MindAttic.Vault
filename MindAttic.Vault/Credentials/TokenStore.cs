@@ -147,6 +147,14 @@ public sealed class TokenStore
         catch { return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
     }
 
+    // True when raw deserializes the way ParseTokensSafe reads it (a flat string map).
+    private static bool IsTokensJson(string raw)
+    {
+        try { return JsonSerializer.Deserialize<Dictionary<string, string>>(raw) is not null; }
+        catch (JsonException) { return false; }
+        catch (NotSupportedException) { return false; }
+    }
+
     private static Dictionary<string, string> ParseTokensSafe(string raw)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -299,6 +307,10 @@ public sealed class TokenStore
     // (which would parse-fail and silently report all tokens as missing).
     private void CommitAtomicSwap(string tempPath)
     {
+        // A tokens.json that no longer parses read as empty, so this swap would replace every token still
+        // in it: keep a copy aside first (tokens.json.corrupt-<timestamp>). Throws if the copy fails.
+        CorruptFileGuard.PreserveIfUnparseable(TokensFilePath, IsTokensJson);
+
         if (File.Exists(TokensFilePath))
             // No backup copy: it would keep a replaced or removed token on disk.
             File.Replace(tempPath, TokensFilePath, null);

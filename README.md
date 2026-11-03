@@ -45,7 +45,7 @@ Get it: the package is `MindAttic.Vault` (current version 5.0.0, built and packe
 
 - `LlmCredentialStore`, `BrokerCredentialStore` and `FtpCredentialStore` read and write the canonical bucket files under `%APPDATA%\MindAttic\<Bucket>\`.
 - `TokenStore` holds single-secret buckets such as GitHub or USPS tokens.
-- Writes are atomic (temp file plus `File.Replace`, with a `.bak` kept), and malformed files are recovered from instead of crashing the host.
+- Writes are atomic (temp file plus `File.Replace`). Settings files keep a `.bak`; credential files (`providers.json`, `tokens.json`, `ftp.json`) keep none, so a replaced secret isn't left on disk. Malformed files are recovered from instead of crashing the host, and a `providers.json` or `tokens.json` that no longer parses is copied aside as `<file>.corrupt-<timestamp>` before a write replaces it.
 
 ### Settings and paths
 
@@ -390,6 +390,15 @@ JsonSettingsStore<MyData>.ForLocalApp("MyApp");
 ```
 
 Writes are atomic (`.tmp` plus `File.Replace` with a `.bak` retained) and serialized under a per-instance `SemaphoreSlim`, so concurrent `Save` and `Update` calls in one process never tear the file. `LoadAsync`, `SaveAsync` and `UpdateAsync` mirror the sync API with `CancellationToken` support. Reads degrade to `new T()` on a missing or malformed file; a settings load never throws.
+
+`Load()` keeps that never-throws contract, so a caller that loads, changes and then saves the whole object can overwrite saved settings with defaults when the file was briefly locked or unreadable. Such callers should use the strict API instead (or `Update`, which already refuses an unreadable file):
+
+```csharp
+var s = store.LoadStrict();               // throws IOException / UnauthorizedAccessException / InvalidDataException
+if (store.TryLoad(out var t)) store.Save(t); // false: saved settings exist but can't be read, so don't save
+```
+
+Both return `new T()` only when nothing is saved yet (missing or blank file).
 
 ### VaultPaths
 

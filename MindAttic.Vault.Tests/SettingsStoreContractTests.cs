@@ -66,6 +66,38 @@ public abstract class SettingsStoreContract
     }
 
     [Test]
+    public void LoadStrict_WhenNothingSaved_ReturnsDefaults()
+    {
+        var store = CreateStore();
+        Assert.That(store.LoadStrict().Name, Is.EqualTo("default-name"));
+        Assert.That(store.TryLoad(out var value), Is.True);
+        Assert.That(value.Name, Is.EqualTo("default-name"));
+    }
+
+    [Test]
+    public async Task LoadStrict_ReturnsSavedSettings()
+    {
+        var store = CreateStore();
+        store.Save(new ContractSettings { Name = "saved" });
+        Assert.That(store.LoadStrict().Name, Is.EqualTo("saved"));
+        Assert.That((await store.LoadStrictAsync()).Name, Is.EqualTo("saved"));
+        Assert.That(store.TryLoad(out var value), Is.True);
+        Assert.That(value.Name, Is.EqualTo("saved"));
+    }
+
+    [Test]
+    public void LoadStrict_OnCorruptSettings_ThrowsInsteadOfReturningDefaults()
+    {
+        var store = CreateStore();
+        store.Save(new ContractSettings { Name = "x" });
+        Corrupt();
+        Assert.Throws<InvalidDataException>(() => store.LoadStrict());
+        Assert.ThrowsAsync<InvalidDataException>(() => store.LoadStrictAsync());
+        Assert.That(store.TryLoad(out var value), Is.False);
+        Assert.That(value.Name, Is.EqualTo("default-name"));
+    }
+
+    [Test]
     public void Update_AppliesMutationAndPersists()
     {
         var store = CreateStore();

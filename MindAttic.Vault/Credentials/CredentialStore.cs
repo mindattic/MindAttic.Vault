@@ -466,6 +466,10 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         // two concurrent writers (separate instances, or separate processes — the
         // in-process writeLock guards neither) clobber each other's temp file and
         // race the swap, defeating the very atomicity this dance exists to provide.
+        // A providers.json that no longer parses read as empty, so this write would replace every key
+        // still in it: keep a copy aside first (providers.json.corrupt-<timestamp>). Throws if the copy fails.
+        CorruptFileGuard.PreserveIfUnparseable(ProvidersFilePath, IsProvidersJsonObject);
+
         var tempPath = ProvidersFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -482,6 +486,17 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
             throw;
         }
+    }
+
+    // True when raw is JSON with an object root, the only shape LoadProvidersRawSafe reads entries from.
+    private static bool IsProvidersJsonObject(string raw)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException) { return false; }
     }
 
     // ── small helpers ───────────────────────────────────────────────────────────

@@ -73,4 +73,22 @@ public sealed class ProviderCatalogTests
     [Test]
     public void Normalize_Blank_Throws() =>
         Assert.Throws<ArgumentException>(() => ProviderCatalog.Normalize(" "));
+
+    [TestCase("alpaca-paper")]
+    [TestCase("Alpaca-Live")]
+    public void UnknownId_InAKnownFamily_TakesThatFamilysBucket(string id)
+    {
+        var p = ProviderCatalog.Get(id);
+        Assert.That(p.Id, Is.EqualTo(id.ToLowerInvariant()));
+        Assert.That(p.Bucket, Is.EqualTo(BrokerCredentialStore.Bucket));
+        Assert.That(p.Category, Is.EqualTo(ProviderCategory.Broker));
+        Assert.That(ProviderCatalog.IsKnown(id), Is.False);
+    }
+
+    [Test]
+    public void FamilyPrefix_NeedsTheDashAndASuffix()
+    {
+        Assert.That(ProviderCatalog.Get("alpacax").Bucket, Is.EqualTo(LlmCredentialStore.Bucket));
+        Assert.That(ProviderCatalog.Get("alpaca").Id, Is.EqualTo("alpaca"));
+    }
 }

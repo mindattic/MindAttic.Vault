@@ -21,6 +21,24 @@ public interface ISettingsStore<T> where T : class, new()
     Task<T> LoadAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Strict <see cref="Load"/> for callers that load, change and then save the whole object: returns
+    /// <c>new T()</c> only when nothing is saved (missing or blank), and throws when saved settings
+    /// exist but can't be read (<see cref="IOException"/>, <see cref="UnauthorizedAccessException"/>) or
+    /// parsed (<see cref="InvalidDataException"/>), so a later Save can't overwrite them with defaults.
+    /// </summary>
+    T LoadStrict();
+
+    /// <summary>Async <see cref="LoadStrict"/>.</summary>
+    Task<T> LoadStrictAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Non-throwing <see cref="LoadStrict"/>: true with the settings (or <c>new T()</c> when nothing is
+    /// saved), false with <c>new T()</c> when saved settings exist but can't be read or parsed. A caller
+    /// that gets false must not Save over the file.
+    /// </summary>
+    bool TryLoad(out T value);
+
+    /// <summary>
     /// First-run entry point: when nothing is saved yet, saves <c>new T()</c> (the class's own
     /// defaults) and returns it; otherwise returns <see cref="Load"/>. Saved settings are never overwritten.
     /// </summary>

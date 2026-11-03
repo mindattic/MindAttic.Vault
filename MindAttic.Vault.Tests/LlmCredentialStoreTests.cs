@@ -114,14 +114,28 @@ public class LlmCredentialStoreTests
     public void SetKey_Survives_Malformed_Existing_Entry()
     {
         using var tmp = new TempDirectory();
-        // The base CredentialStore filters non-object entries during LoadProvidersRawSafe,
-        // so the "broken" provider effectively starts fresh.
-        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"),
-            "{ \"claude\": { not-json-here } }");
+        // A providers.json that no longer parses reads as empty, so the write starts fresh,
+        // but the unparseable file is copied aside first instead of silently overwritten.
+        const string broken = "{ \"claude\": { not-json-here } }";
+        File.WriteAllText(Path.Combine(tmp.Path, "providers.json"), broken);
 
         var store = new LlmCredentialStore(tmp.Path);
-        // Should not throw; should produce a clean entry.
         Assert.DoesNotThrow(() => store.SetKey("claude", "sk-recovered"));
+
+        Assert.That(store.GetKey("claude"), Is.EqualTo("sk-recovered"));
+        var aside = Directory.GetFiles(tmp.Path, "providers.json.corrupt-*");
+        Assert.That(aside, Has.Length.EqualTo(1));
+        Assert.That(File.ReadAllText(aside[0]), Is.EqualTo(broken));
+    }
+
+    [Test]
+    public void SetKey_On_A_Valid_File_Copies_Nothing_Aside()
+    {
+        using var tmp = new TempDirectory();
+        var store = new LlmCredentialStore(tmp.Path);
+        store.SetKey("claude", "a");
+        store.SetKey("openai", "b");
+        Assert.That(Directory.GetFiles(tmp.Path, "*.corrupt-*"), Is.Empty);
     }
 
     [Test]

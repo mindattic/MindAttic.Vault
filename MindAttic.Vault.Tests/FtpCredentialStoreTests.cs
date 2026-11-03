@@ -162,4 +162,25 @@ public class FtpCredentialStoreTests
     {
         Assert.Throws<ArgumentException>(() => new FtpCredentialStore(""));
     }
+
+    [Test]
+    public void Set_Keeps_No_Backup_With_The_Old_Password()
+    {
+        using var tmp = new TempDirectory();
+        var store = new FtpCredentialStore(tmp.Path);
+        store.Set(new FtpCredentialStore.FtpCreds("h", 21, "u", "old-pass", true, null, null));
+        store.Set(new FtpCredentialStore.FtpCreds("h", 21, "u", "new-pass", true, null, null));
+
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "ftp.json.bak")), Is.False);
+        Assert.That(Directory.GetFiles(tmp.Path).Any(f => File.ReadAllText(f).Contains("old-pass")), Is.False);
+    }
+
+    [Test]
+    public void Set_Deletes_A_Leftover_Backup_From_Earlier_Versions()
+    {
+        using var tmp = new TempDirectory();
+        File.WriteAllText(Path.Combine(tmp.Path, "ftp.json.bak"), "{ \"password\": \"old-pass\" }");
+        new FtpCredentialStore(tmp.Path).Set(new FtpCredentialStore.FtpCreds("h", 21, "u", "p", true, null, null));
+        Assert.That(File.Exists(Path.Combine(tmp.Path, "ftp.json.bak")), Is.False);
+    }
 }

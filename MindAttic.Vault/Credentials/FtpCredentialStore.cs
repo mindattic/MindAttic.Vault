@@ -69,7 +69,8 @@ public sealed class FtpCredentialStore
         if (string.IsNullOrWhiteSpace(directory))
             throw new ArgumentException("Directory is required.", nameof(directory));
         Directory = directory;
-        store = new JsonSettingsStore<FtpSettingsFile>(directory, FileName);
+        // No ftp.json.bak: it would keep the replaced password on disk (same as the other credential stores).
+        store = new JsonSettingsStore<FtpSettingsFile>(directory, FileName) { KeepBackup = false };
     }
 
     private static string ResolveDefaultDirectory()
@@ -145,6 +146,11 @@ public sealed class FtpCredentialStore
             ServerName         = creds.ServerName,
             RejectUnauthorized = creds.RejectUnauthorized
         });
+
+        // Earlier versions kept the previous file (and password) as ftp.json.bak; drop it now.
+        try { var bak = FilePath + ".bak"; if (File.Exists(bak)) File.Delete(bak); }
+        catch (IOException) { /* best-effort; retried on the next save */ }
+        catch (UnauthorizedAccessException) { /* best-effort; retried on the next save */ }
     }
 
     /// <summary>
