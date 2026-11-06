@@ -25,6 +25,10 @@ public sealed class MindAtticGlobalSettings
         Help = "The Psst name or address alerts go to (a Psst contact such as ryan, or a US number). Apps fall back to it when their own is blank.", Order = 1)]
     public string AlertRecipient { get; set; } = "";
 
+    [Setting("Default to Desktop 1", Group = "Windows",
+        Help = "Keep every MindAttic window (hosted terminals, Unity/Unreal apps, any .exe under the workspace root) on virtual Desktop 1, and off whatever desktop (2+) you're gaming on. Only acts when more than one virtual desktop exists.", Order = 1)]
+    public bool DefaultToDesktop1 { get; set; } = true;
+
     /// <summary>The shared store.</summary>
     public static JsonSettingsStore<MindAtticGlobalSettings> Store() => JsonSettingsStore<MindAtticGlobalSettings>.ForSettingsApp();
 

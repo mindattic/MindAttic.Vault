@@ -13,7 +13,9 @@
          + app key assignments, key health + KeySelector failover, VaultConfiguration merged tree, KeyImporter. -->
     <!-- 8.0.0: ISettingsStore/JsonSettingsStore gain LoadStrict/LoadStrictAsync/TryLoad (M.VALT-T87) so Load-then-Save
          callers can tell a failed read from a missing file; corrupt providers.json/tokens.json are copied aside before a write. -->
-    <Version>8.0.0</Version>
+    <!-- 9.0.0: Global gains DefaultToDesktop1 (M.VALT-T90), on by default, so a Launcher-hosted watcher
+         can keep MindAttic windows off whatever virtual desktop the user is gaming on. -->
+    <Version>9.0.0</Version>
     <PackageId>MindAttic.Vault</PackageId>
     <Title>MindAttic.Vault</Title>
     <Authors>MindAttic</Authors>

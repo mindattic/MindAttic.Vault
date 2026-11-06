@@ -38,6 +38,12 @@ public sealed class GlobalSettingsTests
     }
 
     [Test]
+    public void DefaultToDesktop1_DefaultsOn()
+    {
+        Assert.That(new MindAtticGlobalSettings().DefaultToDesktop1, Is.True, "on by default: new MindAttic windows shouldn't land on whatever desktop the user is gaming on");
+    }
+
+    [Test]
     public void AlertRecipient_DefaultsBlank_AndRoundTripsUnderItsManifestName()
     {
         Assert.That(new MindAtticGlobalSettings().AlertRecipient, Is.Empty, "blank until the user sets it");
@@ -65,11 +71,14 @@ public sealed class GlobalSettingsTests
         Assert.That(fields.Keys, Is.EquivalentTo(new[]
         {
             "MindAttic:Settings:Global:theme", "MindAttic:Settings:Global:workspaceRoot", "MindAttic:Settings:Global:alertRecipient",
+            "MindAttic:Settings:Global:defaultToDesktop1",
         }));
         var alert = fields["MindAttic:Settings:Global:alertRecipient"];
         Assert.That((alert.Label, alert.Group, alert.Kind), Is.EqualTo(("Alert recipient", "Notifications", SettingKind.Text)));
         Assert.That(alert.Help, Does.Contain("Psst").And.Contain("fall back"));
         Assert.That(fields["MindAttic:Settings:Global:workspaceRoot"].Label, Is.EqualTo("Workspace root"));
+        var pin = fields["MindAttic:Settings:Global:defaultToDesktop1"];
+        Assert.That((pin.Label, pin.Group, pin.Kind), Is.EqualTo(("Default to Desktop 1", "Windows", SettingKind.Bool)));
         foreach (var f in fields.Values)
             Assert.That(f.Name, Does.Not.Contain("key").IgnoreCase.And.Not.Contain("password").IgnoreCase.And.Not.Contain("secret").IgnoreCase, "no secrets");
     }
