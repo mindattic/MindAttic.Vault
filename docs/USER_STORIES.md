@@ -239,3 +239,12 @@ Dependency-ordered toward "publish to nuget.org and ship the health dashboard":
 | M.VALT-T92 | 2026-11-10 | chore | closed | Crash recovery: commit the command-catalog sync (.agent/commands/*.md) and regenerated docs/USER_STORIES.md left uncommitted by the session crash | — |
 | M.VALT-T93 | 2026-11-10 | chore | closed | Adopt the shared docs-site pipeline: turn on GitHub Pages | — |
 | M.VALT-T94 | 2026-11-17 | docs | closed | Update USER_STORIES.md | — |
+| M.VALT-T95 | 2026-11-22 | chore | open | NUnit tests for LlmHealthMonitor sweep in Dashboard Services/LlmHealthMonitor.cs with fake HTTP: Classify, ConsecutiveFailures, transition-only alerts, self-heal on NotFound, trusted ids and MonitorAllKeyed, SweepInProgress reset, concurrent serialization | — |
+| M.VALT-T96 | 2026-11-22 | chore | open | NUnit tests for MonitorBackgroundService: non-positive Interval treated as 1 hour, loop continues after a sweep exception, stops on cancellation | — |
+| M.VALT-T97 | 2026-11-22 | fix | open | Make TokenStore.LoadAllLocked retry transient read IO errors (sharing violation) a few times before returning empty, and check BrokerCredentialStore for the same pattern | — |
+| M.VALT-T98 | 2026-11-22 | chore | open | Run every migrated repo full test suite, fix or ticket each failure | — |
+| M.VALT-T99 | 2026-11-22 | chore | open | Add an ecosystem-wide Vault integration suite covering all manifests, settings files, keys and links | — |
+| M.VALT-T100 | 2026-11-22 | feature | open | Implement encrypted (passphrase-based) export and import of Vault keys and service secrets in the Vault library, with tests | — |
+| M.VALT-T101 | 2026-11-22 | feature | open | Add export and import commands to Vault.Desktop using the core, so a new host machine can be seeded | — |
+| M.VALT-T102 | 2026-11-22 | fix | open | Wrap TokenStore Set/Remove read-modify-write in a cross-process named mutex or lock file, with a test that two store instances hammering Set/Get never miss or lose a token | — |
+| M.VALT-T103 | 2026-11-22 | docs | closed | 2026-11-22 morning | — |
