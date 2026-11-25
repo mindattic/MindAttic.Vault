@@ -89,4 +89,26 @@ public sealed class EqualTabWidthsTests
         }
         finally { window.Close(); }
     }
+
+    [Test]
+    public void Enabled_ReappliesWhenOneTabOutgrowsTheRest()
+    {
+        var tabs = Strip("Keys", "Tutor");
+        var window = new Window { Content = tabs, Width = 900, Height = 300, Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false };
+        EqualTabWidths.SetIsEnabled(tabs, true);
+        window.Show();
+        try
+        {
+            Pump();
+            var first = EqualTabWidths.Containers(tabs)[0].MinWidth;
+
+            EqualTabWidths.Containers(tabs)[1].Header = "Tutor (unsaved changes pending)"; // M.VALT-T105
+            Pump();
+            var now = EqualTabWidths.Containers(tabs);
+            Assert.That(now.Select(t => t.MinWidth).Distinct().Count(), Is.EqualTo(1));
+            Assert.That(now[0].MinWidth, Is.GreaterThan(first));
+            Assert.That(now.Select(t => t.ActualWidth).Distinct().Count(), Is.EqualTo(1));
+        }
+        finally { window.Close(); }
+    }
 }

@@ -8,7 +8,8 @@ namespace MindAttic.Vault.Desktop.Services;
 /// <summary>
 /// Makes every tab of a <see cref="TabControl"/> as wide as its widest one, so the strip reads as equal-width buttons
 /// (M.VALT-T64). The width is measured from the tabs themselves (their real font, padding, status light and trailing text),
-/// on load, whenever the control is resized (window resize, DPI change) and whenever tabs are added, removed or retitled.
+/// on load, whenever the control is resized (window resize, DPI change), whenever tabs are added or removed, and whenever one
+/// tab's own width changes (retitled, its trailing text or status light appearing, a font change) (M.VALT-T105).
 /// <code>&lt;mc:MaTabControl services:EqualTabWidths.IsEnabled="True" ... /&gt;</code>
 /// </summary>
 public static class EqualTabWidths
@@ -28,7 +29,8 @@ public static class EqualTabWidths
         if ((bool)e.NewValue)
         {
             tabs.Loaded += OnChanged;
-            tabs.SizeChanged += OnChanged;
+            // Routed, so it also hears one tab outgrowing the rest (retitled, "unsaved", a status light) (M.VALT-T105).
+            tabs.AddHandler(FrameworkElement.SizeChangedEvent, SizeChangedHandler);
             tabs.ItemContainerGenerator.StatusChanged += (_, _) => Schedule(tabs);
             ((System.Collections.Specialized.INotifyCollectionChanged)tabs.Items).CollectionChanged += (_, _) => Schedule(tabs);
             Schedule(tabs);
@@ -36,11 +38,21 @@ public static class EqualTabWidths
         else
         {
             tabs.Loaded -= OnChanged;
-            tabs.SizeChanged -= OnChanged;
+            tabs.RemoveHandler(FrameworkElement.SizeChangedEvent, SizeChangedHandler);
         }
     }
 
+    private static readonly SizeChangedEventHandler SizeChangedHandler = OnSizeChanged;
+
     private static void OnChanged(object sender, RoutedEventArgs e) => Schedule((TabControl)sender);
+
+    private static void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var tabs = (TabControl)sender;
+        if (ReferenceEquals(e.OriginalSource, tabs)
+            || (e.WidthChanged && e.OriginalSource is TabItem t && ItemsControl.ItemsControlFromItemContainer(t) == tabs))
+            Schedule(tabs);
+    }
 
     /// <summary>Coalesces bursts (a resize drag, a reload of every tab) into one pass after layout.</summary>
     private static void Schedule(TabControl tabs)
