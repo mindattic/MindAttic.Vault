@@ -125,6 +125,13 @@ public sealed class KeyAssignmentStore
         return result;
     }
 
+    // True when raw is JSON with an object root, the only shape Read takes assignments from.
+    private static bool IsAssignmentsJson(string raw)
+    {
+        try { return JsonNode.Parse(raw) is JsonObject; }
+        catch (JsonException) { return false; }
+    }
+
     private void Mutate(Action<Dictionary<string, Dictionary<string, List<string>>>> change)
     {
         lock (gate)
@@ -139,6 +146,9 @@ public sealed class KeyAssignmentStore
                     obj[provider] = new JsonArray(names.Select(n => (JsonNode)JsonValue.Create(n)!).ToArray());
                 root[app] = obj;
             }
+            // A key-assignments.json that no longer parses read as empty, so this write would drop every
+            // other app's assignments: keep a copy aside first. Throws if the copy fails.
+            CorruptFileGuard.PreserveIfUnparseable(FilePath, IsAssignmentsJson);
             AtomicFile.WriteAllText(FilePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
     }
