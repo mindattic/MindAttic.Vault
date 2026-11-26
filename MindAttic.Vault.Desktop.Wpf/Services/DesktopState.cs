@@ -43,6 +43,7 @@ public sealed class DesktopStateKeeper : IDisposable
     private readonly object gate = new();
     private readonly Timer timer;
     private bool pending;
+    private bool disposed;
 
     public DesktopStateKeeper(JsonSettingsStore<VaultDesktopState>? store = null, TimeSpan? debounce = null)
     {
@@ -63,6 +64,8 @@ public sealed class DesktopStateKeeper : IDisposable
         lock (gate)
         {
             change(State);
+            // After Dispose the final flush has run and the timer is gone: a late window event is dropped, not thrown.
+            if (disposed) return;
             pending = true;
             timer.Change(debounce, Timeout.InfiniteTimeSpan);
         }
@@ -86,6 +89,7 @@ public sealed class DesktopStateKeeper : IDisposable
     public void Dispose()
     {
         Flush();
+        lock (gate) disposed = true;
         timer.Dispose();
     }
 }
