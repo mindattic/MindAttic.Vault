@@ -179,8 +179,9 @@ public sealed class AzureSetupViewModel : ObservableObject
         var subs = await catalog.ListSubscriptionsAsync().ConfigureAwait(true);
         Replace(Subscriptions, subs);
         var current = store.Current();
+        var before = PendingLoad;
         SelectedSubscription = subs.FirstOrDefault(s => s.SubscriptionId == current?.SubscriptionId) ?? (subs.Count == 1 ? subs[0] : null);
-        await PendingLoad.ConfigureAwait(true);
+        if (!ReferenceEquals(before, PendingLoad)) await PendingLoad.ConfigureAwait(true);
         return subs.Count == 0 ? "No subscriptions are visible to this account." : $"{subs.Count} subscription(s).";
     });
 
@@ -195,8 +196,11 @@ public sealed class AzureSetupViewModel : ObservableObject
         Replace(ResourceGroups, groups);
         var current = store.Current();
         var match = current is null ? null : groups.FirstOrDefault(g => ResourceGroupOf(current.KeyVaultResourceId) is { } rg && string.Equals(rg, g.Name, StringComparison.OrdinalIgnoreCase));
+        // Await the next level's load only when the setter started one: if the selection didn't change,
+        // PendingLoad is still this very load, and awaiting it would never finish.
+        var before = PendingLoad;
         SelectedResourceGroup = match ?? (groups.Count == 1 ? groups[0] : null);
-        await PendingLoad.ConfigureAwait(true);
+        if (!ReferenceEquals(before, PendingLoad)) await PendingLoad.ConfigureAwait(true);
         return $"{groups.Count} resource group(s) in {sub.DisplayName}.";
     });
 
