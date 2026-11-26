@@ -22,7 +22,7 @@ public static class Ecosystem
     /// <summary>Every app the LAMP migration (M.VALT-T35) moved into Vault; each must have a manifest on this machine.</summary>
     public static readonly IReadOnlyList<string> ExpectedApps = new[]
     {
-        "Automata", "Capture", "Claudia", "Cursory", "Formicarium", "Global", "Ideas", "IdiotProof", "JellyFinPoster",
+        "Automata", "Capture", "Claudia", "Cursory", "Formicarium", "Global", "IdeaCms", "IdiotProof", "JellyFinPoster",
         "JobHunt", "MediaButler", "MindAttic.Browser", "MindAttic.Launcher", "MindAttic.Log.Reader", "OpenCredentials",
         "Orchestrator", "ProcessLogger", "Prose", "TaxRateCollector", "ThinkTank", "Tickets", "Tutor", "UnstuckTaskbar",
     };
