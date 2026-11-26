@@ -80,8 +80,9 @@ public sealed class KeyVaultKeyBackend : IKeyBackend
 
     public async Task<IReadOnlyList<string>> GetAssignmentAsync(string appId, string providerId, CancellationToken cancellationToken = default)
     {
-        var settings = await ListAsync(LampNames.Assignment(RequiredApp(appId), providerId), cancellationToken).ConfigureAwait(false);
-        return IndexedValues(settings, LampNames.Assignment(appId, providerId))
+        var path = LampNames.Assignment(RequiredApp(appId), providerId);
+        var settings = await ListAsync(path, cancellationToken).ConfigureAwait(false);
+        return IndexedValues(settings, path)
             .Select(s => s.Value?.Trim())
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .Select(v => v!)
