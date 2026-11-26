@@ -17,7 +17,7 @@ public sealed record VaultOpenRequest
     public const int MaxSettingLength = 256;
     public const string Scheme = "mindattic-vault";
 
-    private static readonly Regex AppIdPattern = new("^[A-Za-z0-9._-]{1,64}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex AppIdPattern = new(@"^[A-Za-z0-9._-]{1,64}\z", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public VaultOpenRequest(string appId, string? setting = null)
     {
