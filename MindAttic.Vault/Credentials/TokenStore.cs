@@ -22,8 +22,10 @@ namespace MindAttic.Vault.Credentials;
 ///
 /// <para><b>Thread safety:</b> safe for concurrent reads and writes within a
 /// single process — all operations are serialised through an internal lock.
-/// Cross-process safety is provided by the atomic temp-file-then-rename swap
-/// in <see cref="WriteAll"/>.</para>
+/// Writers in other processes (or other instances on the same directory) are serialised
+/// by an exclusive <c>tokens.json.lock</c> file held across each Set/Remove read-modify-write, and
+/// readers never see a half-written file thanks to the atomic temp-file-then-rename swap in
+/// <see cref="WriteAll"/>.</para>
 ///
 /// <para><b>Case sensitivity:</b> token names are matched case-insensitively
 /// (<c>"github"</c> and <c>"GitHub"</c> resolve to the same entry).</para>
@@ -32,6 +34,9 @@ public sealed class TokenStore
 {
     /// <summary>Filename of the on-disk tokens file.</summary>
     public const string TokensJsonFile = "tokens.json";
+
+    /// <summary>Filename of the cross-process write lock beside <c>tokens.json</c>.</summary>
+    public const string LockFile = "tokens.json.lock";
 
     // Single-process serialisation gate. Guards both reads and writes so a Set's
     // File.Replace cannot interleave with a concurrent LoadAll on the same instance.
@@ -194,6 +199,7 @@ public sealed class TokenStore
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = AcquireFileLock();
             var all = LoadAllLocked(forWrite: true);
             all[name] = token?.Trim() ?? "";
             WriteAll(all);
@@ -216,6 +222,7 @@ public sealed class TokenStore
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = await AcquireFileLockAsync(cancellationToken).ConfigureAwait(false);
             var all = await LoadAllLockedAsync(cancellationToken, forWrite: true).ConfigureAwait(false);
             all[name] = token?.Trim() ?? "";
             await WriteAllAsync(all, cancellationToken).ConfigureAwait(false);
@@ -235,14 +242,46 @@ public sealed class TokenStore
         writeLock.Wait();
         try
         {
+            System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = AcquireFileLock();
             var all = LoadAllLocked(forWrite: true);
             if (!all.Remove(name)) return false;
-            // Re-create the directory in case it was deleted between LoadAll and now.
-            System.IO.Directory.CreateDirectory(Directory);
             WriteAll(all);
             return true;
         }
         finally { writeLock.Release(); }
+    }
+
+    // Exclusive lock file shared by every process and instance writing this directory. A file lock (not a
+    // named Mutex) because Mutex is thread-affine and the async overloads can resume on another thread.
+    private FileStream AcquireFileLock()
+    {
+        var path = Path.Combine(Directory, LockFile);
+        while (true)
+        {
+            if (TryOpenLock(path, out var stream)) return stream!;
+            Thread.Sleep(5);
+        }
+    }
+
+    private async Task<FileStream> AcquireFileLockAsync(CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(Directory, LockFile);
+        while (true)
+        {
+            if (TryOpenLock(path, out var stream)) return stream!;
+            await Task.Delay(5, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static bool TryOpenLock(string path, out FileStream? stream)
+    {
+        try
+        {
+            stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException) { stream = null; return false; }
     }
 
     /// <summary>

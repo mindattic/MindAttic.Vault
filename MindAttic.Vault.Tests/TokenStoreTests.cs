@@ -223,4 +223,32 @@ public class TokenStoreTests
         Assert.That(aside, Has.Length.EqualTo(1));
         Assert.That(File.ReadAllText(aside[0]), Is.EqualTo("{ broken"));
     }
+
+    [Test]
+    public async Task Two_Stores_On_One_Directory_Never_Lose_A_Token()
+    {
+        using var tmp = new TempDirectory();
+        var a = new TokenStore(tmp.Path);
+        var b = new TokenStore(tmp.Path);
+        const int perStore = 60;
+
+        Task Hammer(TokenStore store, string prefix) => Task.Run(() =>
+        {
+            for (var i = 0; i < perStore; i++)
+            {
+                store.Set($"{prefix}{i}", $"v-{prefix}{i}");
+                Assert.That(store.Get($"{prefix}{i}"), Is.EqualTo($"v-{prefix}{i}"));
+            }
+        });
+
+        await Task.WhenAll(Hammer(a, "a"), Hammer(b, "b"));
+
+        var all = new TokenStore(tmp.Path).LoadAll();
+        Assert.That(all, Has.Count.EqualTo(perStore * 2));
+        for (var i = 0; i < perStore; i++)
+        {
+            Assert.That(all["a" + i], Is.EqualTo("v-a" + i));
+            Assert.That(all["b" + i], Is.EqualTo("v-b" + i));
+        }
+    }
 }
