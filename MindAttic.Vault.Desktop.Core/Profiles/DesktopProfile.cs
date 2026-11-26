@@ -108,7 +108,16 @@ public sealed class DesktopSettingsBackend : ISettingsBackend
             if (!string.Equals(document.Version, currentVersion, StringComparison.Ordinal))
                 throw new ConcurrencyConflictException($"{Name(manifest)}'s settings changed on disk since you opened them.");
 
-            var target = (current is null ? null : Parse(current)) ?? new JsonObject();
+            var parsed = current is null ? null : Parse(current);
+            // A settings.json that no longer parses (a hand edit with a stray comma) loads as defaults, so this
+            // write would replace it with only the changed fields: keep a copy aside first (M.VALT-T109).
+            if (current is not null && parsed is null && current.Any(b => b is not (byte)' ' and not (byte)'\t' and not (byte)'\r' and not (byte)'\n'))
+            {
+                var copy = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff");
+                if (File.Exists(copy)) copy += "-" + Guid.NewGuid().ToString("N")[..8];
+                File.Copy(path, copy, overwrite: false);
+            }
+            var target = parsed ?? new JsonObject();
             var prefix = string.IsNullOrEmpty(manifest.ConfigurationPrefix) ? SettingsManifest.PrefixFor(manifest.AppId) : manifest.ConfigurationPrefix;
             foreach (var name in changedFields) SettingsDocumentMerge.Apply(document.Values, target, prefix, name);
 
