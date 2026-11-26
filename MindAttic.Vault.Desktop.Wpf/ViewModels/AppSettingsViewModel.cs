@@ -22,6 +22,7 @@ public sealed class AppSettingsViewModel : TabViewModel
     private JsonObject manifestJson;
     private JsonObject? document;
     private string? version;
+    private ProfileReadiness lastReadiness = ProfileReadiness.Ready;
 
     public AppSettingsViewModel(SettingsManifest manifest, DesktopContext context)
     {
@@ -104,6 +105,7 @@ public sealed class AppSettingsViewModel : TabViewModel
     public override async Task LoadAsync(IProfile target, ProfileReadiness readiness)
     {
         profile = target;
+        lastReadiness = readiness;
         if (!readiness.IsReady)
         {
             changed.Clear();
@@ -200,7 +202,7 @@ public sealed class AppSettingsViewModel : TabViewModel
         Raise(nameof(Title));
         Raise(nameof(Description));
         SyncCredentials();
-        if (profile is not null && !IsDirty) await LoadAsync(profile, ProfileReadiness.Ready).ConfigureAwait(true);
+        if (profile is not null && !IsDirty) await LoadAsync(profile, lastReadiness).ConfigureAwait(true);
         return true;
     }
 
