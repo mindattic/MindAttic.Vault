@@ -244,6 +244,7 @@ public static class VaultSettings
 public static class VaultDesktopPipeServer
 {
     public const int MaxMessageBytes = 4096;
+    public static int ReadTimeoutMs { get; set; } = 5000;
 
     public static async Task RunAsync(Action<VaultOpenRequest> onRequest, Action<string>? onRejected = null,
         string? pipeName = null, CancellationToken cancellationToken = default)
@@ -262,7 +263,9 @@ public static class VaultDesktopPipeServer
                 var buffer = new byte[MaxMessageBytes + 1];
                 var total = 0;
                 int read;
-                while (total < buffer.Length && (read = await server.ReadAsync(buffer.AsMemory(total), cancellationToken).ConfigureAwait(false)) > 0)
+                using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                readTimeout.CancelAfter(ReadTimeoutMs);
+                while (total < buffer.Length && (read = await server.ReadAsync(buffer.AsMemory(total), readTimeout.Token).ConfigureAwait(false)) > 0)
                     total += read;
 
                 if (total > MaxMessageBytes) { onRejected?.Invoke("message too large"); continue; }
@@ -274,9 +277,18 @@ public static class VaultDesktopPipeServer
             {
                 break;
             }
+            catch (OperationCanceledException)
+            {
+                onRejected?.Invoke("read timed out");
+            }
             catch (IOException)
             {
                 // A client that disconnects early is not an error.
+            }
+            catch (Exception ex)
+            {
+                // A throwing callback must not end the loop: the Desktop would stop hearing every later request.
+                onRejected?.Invoke("request handler failed: " + ex.Message);
             }
             finally
             {
