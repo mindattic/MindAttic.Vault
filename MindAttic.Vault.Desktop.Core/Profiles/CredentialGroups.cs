@@ -224,6 +224,9 @@ public sealed class DesktopCredentialGroupBackend : ICredentialGroupBackend
             var dir = Path.GetDirectoryName(path)!;
             Directory.CreateDirectory(dir);
             var stored = (current is null ? null : Parse(current)) ?? new JsonObject();
+            // A file that doesn't parse loads as empty; keep a copy before the whole-document write replaces whatever is left in it.
+            if (current is not null && Parse(current) is null && !string.IsNullOrWhiteSpace(Encoding.UTF8.GetString(current)))
+                File.Copy(path, path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N")[..8], overwrite: false);
             if (group.Shape == CredentialGroupShape.Tokens && IsPlainTokenMap(values) && IsPlainTokenMap(stored))
                 WriteThroughTokenStore(new TokenStore(dir), stored, values);
             else if (group.Shape == CredentialGroupShape.Entries && string.Equals(group.FileName, CredentialStore.ProvidersJsonFile, StringComparison.OrdinalIgnoreCase)
