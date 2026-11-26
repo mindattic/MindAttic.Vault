@@ -137,6 +137,16 @@ If the app already has a folder there, use that exact name.
 - **Don't edit files with Windows PowerShell 5.1** `Get-Content`/`Set-Content`: it re-encodes UTF-8 and
   garbles non-ASCII text. Use the editor tools, PowerShell 7, or `-Encoding utf8` on both read and write.
 
+## Final verification (M.VALT-T57)
+
+- 2026-10-31: every app migration landed; `mindattic-vault://open?app=<id>` selected the right tab for all 23
+  manifests; 13 apps passed a real cog click and Prose passed via the app's own `VaultSettings.Open(AppId)` call;
+  each migrated repo ran its full suite (Prose's two unrelated failures: PRS-T830, PRS-T831).
+- 2026-11-26 re-check: 24 manifests under `%APPDATA%\MindAttic` and `%LOCALAPPDATA%\MindAttic`; every app source
+  tree with a settings screen still reaches Vault through `VaultSettings`. One gap: MediaViewer writes a manifest
+  but has no cog (M.MVIEW-T38). Vault.Desktop's Azure profile has nothing to connect to since MAT-T297 (M.VALT-T126).
+- The Orchestrator restart is the user's step (CLIs idle, `run.ps1`); the full suites run on main by the orchestrator.
+
 ## Rules while migrating
 
 Work on `main` in the repo's own checkout (no branches, no worktrees). One ticket per commit, subject ending
