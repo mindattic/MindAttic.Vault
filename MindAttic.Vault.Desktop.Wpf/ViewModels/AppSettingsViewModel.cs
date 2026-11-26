@@ -175,7 +175,7 @@ public sealed class AppSettingsViewModel : TabViewModel
             return false;
         }
 
-        changed.Clear();
+        changed.ExceptWith(names);
         RaiseDirty();
         StatusText = $"Saved {names.Count} change{(names.Count == 1 ? "" : "s")}. Apps see it {profile.Settings.WhenAppsSeeChanges}.";
         DesktopLog.For("Tabs").Information("Saved {App} in {Profile}: {Fields}", AppId, profile.Id, names);
