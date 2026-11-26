@@ -284,7 +284,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
 
     /// <summary>Pulls the <c>apiKey</c> string field out of a per-provider JSON object.</summary>
     private static string? ExtractApiKeyFromProviderJson(string? json) =>
-        ExtractApiKeysFromProviderJson(json).FirstOrDefault()?.Key;
+        ExtractApiKeysFromProviderJson(json).FirstOrDefault(k => !k.Disabled)?.Key;
 
     /// <summary>
     /// Pulls the key pool out of a per-provider JSON object: the <c>apiKeys</c> array
