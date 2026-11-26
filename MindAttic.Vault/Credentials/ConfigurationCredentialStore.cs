@@ -225,7 +225,8 @@ public sealed class ConfigurationCredentialStore : ICredentialStore
         // anything beyond that stays a verbatim string rather than being mangled.
         if (decimal.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec))
                                                                     { writer.WriteNumberValue(dec); return; }
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+            && double.IsFinite(d)) // "nan" / "infinity" / "1e999" parse as non-finite, which WriteNumberValue rejects: keep them strings.
                                                                     { writer.WriteNumberValue(d); return; }
         writer.WriteStringValue(value);
     }
