@@ -122,6 +122,38 @@ public sealed class TokenStore
         finally { writeLock.Release(); }
     }
 
+    private const int ReadAttempts = 5;
+    private const int ReadRetryDelayMs = 25;
+
+    private static bool IsTransientRead(IOException ex) =>
+        ex is not (FileNotFoundException or DirectoryNotFoundException or PathTooLongException);
+
+    // Another process's File.Replace swap can hold the file for a few ms (sharing violation);
+    // retry briefly before the caller treats the read as failed.
+    internal static string ReadAllTextRetrying(string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (IOException ex) when (attempt < ReadAttempts && IsTransientRead(ex))
+            {
+                Thread.Sleep(ReadRetryDelayMs * attempt);
+            }
+        }
+    }
+
+    private static async Task<string> ReadAllTextRetryingAsync(string path, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false); }
+            catch (IOException ex) when (attempt < ReadAttempts && IsTransientRead(ex))
+            {
+                await Task.Delay(ReadRetryDelayMs * attempt, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
     // Caller owns writeLock. forWrite: the caller rewrites the whole file from this map, so an existing
     // file that can't be read (locked by another process's swap, access denied) throws instead of reading
     // as empty, which would otherwise drop every other token on the write.
@@ -131,7 +163,7 @@ public sealed class TokenStore
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            var raw = File.ReadAllText(TokensFilePath);
+            var raw = ReadAllTextRetrying(TokensFilePath);
             return ParseTokensSafe(raw);
         }
         catch (Exception ex) when (forWrite && ex is UnauthorizedAccessException or (IOException and not (FileNotFoundException or DirectoryNotFoundException))) { throw; }
@@ -144,7 +176,7 @@ public sealed class TokenStore
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            var raw = await File.ReadAllTextAsync(TokensFilePath, cancellationToken).ConfigureAwait(false);
+            var raw = await ReadAllTextRetryingAsync(TokensFilePath, cancellationToken).ConfigureAwait(false);
             return ParseTokensSafe(raw);
         }
         catch (OperationCanceledException) { throw; }

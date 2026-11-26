@@ -253,7 +253,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         {
             if (!File.Exists(ProvidersFilePath)) return result;
 
-            var raw = File.ReadAllText(ProvidersFilePath);
+            var raw = TokenStore.ReadAllTextRetrying(ProvidersFilePath);
             if (string.IsNullOrWhiteSpace(raw)) return result;
 
             using var doc = JsonDocument.Parse(raw);
