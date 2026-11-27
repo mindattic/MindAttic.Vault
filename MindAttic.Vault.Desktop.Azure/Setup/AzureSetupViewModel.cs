@@ -284,18 +284,27 @@ public sealed class AzureSetupViewModel : ObservableObject
         }
         catch (ProfileAccessDeniedException ex)
         {
-            Error = ex.Message;
-            Status = null;
+            if (generation == loadGeneration)
+            {
+                Error = ex.Message;
+                Status = null;
+            }
         }
         catch (RequestFailedException ex)
         {
-            Error = $"Azure returned an error ({ex.Status}{(string.IsNullOrEmpty(ex.ErrorCode) ? "" : ", " + ex.ErrorCode)}).";
-            Status = null;
+            if (generation == loadGeneration)
+            {
+                Error = $"Azure returned an error ({ex.Status}{(string.IsNullOrEmpty(ex.ErrorCode) ? "" : ", " + ex.ErrorCode)}).";
+                Status = null;
+            }
         }
         catch (AuthenticationFailedException)
         {
-            Error = "Your Azure sign-in needs renewing. Sign in again.";
-            Status = null;
+            if (generation == loadGeneration)
+            {
+                Error = "Your Azure sign-in needs renewing. Sign in again.";
+                Status = null;
+            }
         }
         finally
         {

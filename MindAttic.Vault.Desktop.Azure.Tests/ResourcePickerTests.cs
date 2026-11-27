@@ -220,6 +220,56 @@ public sealed class ResourcePickerTests
         await Task.CompletedTask;
     }
 
+    [Test]
+    public async Task ViewModel_SupersededLoadFails_DoesNotClobberTheCurrentLoad()
+    {
+        using var temp = new TempDirectory();
+        var catalog = new RaceResourceCatalog(SubA);
+        var vm = new AzureSetupViewModel(new FakeSession(), catalog, new AzureEnvironmentStore(temp.Path));
+
+        vm.SelectedSubscription = new AzureSubscriptionInfo(SubA, "alpha", null); // A's resource groups never arrive yet
+        var loadA = vm.PendingLoad;
+        vm.SelectedSubscription = new AzureSubscriptionInfo(SubB, "Beta", null); // B supersedes A before A answers
+        await vm.PendingLoad;
+
+        Assert.That(vm.Status, Is.EqualTo("0 resource group(s) in Beta."));
+        Assert.That(vm.Error, Is.Null);
+
+        catalog.FailPending(new global::Azure.RequestFailedException(403, "no")); // A's answer arrives late, and fails
+        await loadA;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(vm.Error, Is.Null, "B's load is current; A's failure must not surface");
+            Assert.That(vm.Status, Is.EqualTo("0 resource group(s) in Beta."), "B's result must survive A's late failure");
+            Assert.That(vm.IsBusy, Is.False);
+        });
+    }
+
+    /// <summary>A catalog whose <see cref="ListResourceGroupsAsync"/> for <see cref="delayedSubscriptionId"/> hangs
+    /// until <see cref="FailPending"/> is called; every other subscription answers with no resource groups.</summary>
+    private sealed class RaceResourceCatalog : IAzureResourceCatalog
+    {
+        private readonly string delayedSubscriptionId;
+        private readonly TaskCompletionSource<IReadOnlyList<AzureResourceGroupInfo>> pending = new();
+
+        public RaceResourceCatalog(string delayedSubscriptionId) => this.delayedSubscriptionId = delayedSubscriptionId;
+
+        public void FailPending(Exception ex) => pending.SetException(ex);
+
+        public Task<IReadOnlyList<AzureSubscriptionInfo>> ListSubscriptionsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<AzureResourceGroupInfo>> ListResourceGroupsAsync(string subscriptionId, CancellationToken cancellationToken = default) =>
+            subscriptionId == delayedSubscriptionId ? pending.Task : Task.FromResult<IReadOnlyList<AzureResourceGroupInfo>>(Array.Empty<AzureResourceGroupInfo>());
+
+        public Task<IReadOnlyList<AzureResourceInfo>> ListKeyVaultsAsync(string subscriptionId, string resourceGroup, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<AzureResourceInfo>> ListAppConfigurationStoresAsync(string subscriptionId, string resourceGroup, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
     internal static AzureEnvironment Env(string name, string vaultHost = "kv.vault.azure.net", string storeHost = "ac.azconfig.io") => new()
     {
         Name = name,
