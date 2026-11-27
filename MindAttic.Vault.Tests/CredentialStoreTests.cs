@@ -171,6 +171,35 @@ public class CredentialStoreTests
         Assert.That(doc.RootElement.GetProperty("two").GetProperty("apiKey").GetString(), Is.EqualTo("k2"));
     }
 
+    [Test]
+    public void SetKey_From_Several_Store_Instances_At_Once_Never_Throws()
+    {
+        // Regression for M.VALT-T127: several processes writing providers.json at
+        // once raced File.Replace ("Unable to remove the file to be replaced" /
+        // file-exists). Separate CredentialStore instances on the same directory
+        // stand in for separate processes — each has its own in-process writeLock,
+        // so only the cross-process providers.json.lock file can serialise them.
+        using var tmp = new TempDirectory();
+        const int writerCount = 8;
+
+        var errors = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+        Parallel.For(0, writerCount, i =>
+        {
+            try
+            {
+                var store = new CredentialStore(tmp.Path);
+                store.SetKey("provider-" + i, "secret-" + i);
+            }
+            catch (Exception ex) { errors.Add(ex); }
+        });
+
+        Assert.That(errors, Is.Empty, string.Join("; ", errors.Select(e => e.Message)));
+
+        var finalStore = new CredentialStore(tmp.Path);
+        for (var i = 0; i < writerCount; i++)
+            Assert.That(finalStore.GetKey("provider-" + i), Is.EqualTo("secret-" + i));
+    }
+
     // ── Constructor / argument validation ───────────────────────────────────────
 
     [Test]

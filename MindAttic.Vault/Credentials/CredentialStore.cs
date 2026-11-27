@@ -23,8 +23,11 @@ namespace MindAttic.Vault.Credentials;
 /// <c>providers.json</c>.</para>
 ///
 /// <para><b>Thread safety:</b> safe for concurrent reads. Writes within a single
-/// process are serialised by an internal lock. Cross-process safety relies on the
-/// atomic <see cref="File.Replace(string, string, string?)"/> swap.</para>
+/// process are serialised by an internal lock. Writers in other processes (or other
+/// instances on the same directory) are serialised by an exclusive
+/// <c>providers.json.lock</c> file held across each read-modify-write, and readers
+/// never see a half-written file thanks to the atomic
+/// <see cref="File.Replace(string, string, string?)"/> swap in <see cref="WriteProvidersJson"/>.</para>
 /// </summary>
 public class CredentialStore : ICredentialStore, IRotatingKeyStore
 {
@@ -37,8 +40,12 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
     /// <summary>Extension for per-provider override key files (e.g. <c>claude.key</c>).</summary>
     public const string KeyFileExtension    = ".key";
 
-    // Single-process serialisation gate for all mutating operations. The atomic
-    // temp-file swap in WriteProvidersJson handles cross-process safety.
+    /// <summary>Filename of the cross-process write lock beside <c>providers.json</c>.</summary>
+    public const string LockFile = "providers.json.lock";
+
+    // Single-process serialisation gate for all mutating operations. Cross-process
+    // safety for the read-modify-write + atomic swap comes from the exclusive
+    // file lock acquired in AcquireFileLock (see WriteProvidersJson).
     private readonly object writeLock = new();
 
     /// <summary>The bucket directory on disk. Does not have to exist yet — it's created lazily on first write.</summary>
@@ -151,6 +158,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         lock (writeLock)
         {
             System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = AcquireFileLock();
 
             // Read-modify-write: pull the current map, splice in the new primary
             // apiKey (subclasses get to decide how the splice handles their richer
@@ -219,6 +227,7 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         lock (writeLock)
         {
             System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = AcquireFileLock();
             WriteProvidersJson(providers);
         }
     }
@@ -229,12 +238,37 @@ public class CredentialStore : ICredentialStore, IRotatingKeyStore
         if (string.IsNullOrWhiteSpace(providerId)) return;
         lock (writeLock)
         {
+            System.IO.Directory.CreateDirectory(Directory);
+            using var fileLock = AcquireFileLock();
             var providers = LoadProvidersRawSafe(forWrite: true);
             // Empty payload normalised to {} so the on-disk file is always valid JSON.
             providers[providerId] = string.IsNullOrWhiteSpace(rawProviderJson) ? "{}" : rawProviderJson;
-            System.IO.Directory.CreateDirectory(Directory);
             WriteProvidersJson(providers);
         }
+    }
+
+    // Exclusive lock file shared by every process and instance writing this directory,
+    // held across the read-modify-write + atomic swap so two processes' File.Replace
+    // calls on providers.json can never interleave (the race behind "Unable to remove
+    // the file to be replaced" / file-exists errors with several writers at once).
+    private FileStream AcquireFileLock()
+    {
+        var path = Path.Combine(Directory, LockFile);
+        while (true)
+        {
+            if (TryOpenLock(path, out var stream)) return stream!;
+            Thread.Sleep(5);
+        }
+    }
+
+    private static bool TryOpenLock(string path, out FileStream? stream)
+    {
+        try
+        {
+            stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException) { stream = null; return false; }
     }
 
     // ── providers.json helpers ──────────────────────────────────────────────────
