@@ -190,7 +190,14 @@ public sealed class AzureSetupViewModel : ObservableObject
         ResourceGroups.Clear();
         KeyVaults.Clear();
         AppConfigurationStores.Clear();
-        if (SelectedSubscription is not { } sub) return null;
+        SelectedKeyVault = null;
+        SelectedAppConfigurationStore = null;
+        if (SelectedSubscription is not { } sub)
+        {
+            selectedResourceGroup = null;
+            Raise(nameof(SelectedResourceGroup));
+            return null;
+        }
         var groups = await catalog.ListResourceGroupsAsync(sub.SubscriptionId).ConfigureAwait(true);
         if (!ReferenceEquals(sub, SelectedSubscription)) return null;
         Replace(ResourceGroups, groups);
@@ -208,6 +215,8 @@ public sealed class AzureSetupViewModel : ObservableObject
     {
         KeyVaults.Clear();
         AppConfigurationStores.Clear();
+        SelectedKeyVault = null;
+        SelectedAppConfigurationStore = null;
         if (SelectedSubscription is not { } sub || SelectedResourceGroup is not { } rg) return null;
         var vaults = await catalog.ListKeyVaultsAsync(sub.SubscriptionId, rg.Name).ConfigureAwait(true);
         var stores = await catalog.ListAppConfigurationStoresAsync(sub.SubscriptionId, rg.Name).ConfigureAwait(true);
