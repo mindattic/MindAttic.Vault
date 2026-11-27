@@ -92,6 +92,30 @@ public sealed class KeyVaultKeyBackendTests
     }
 
     [Test]
+    public async Task SetValue_OnAVersionPinnedReference_UnpinsItAfterWritingTheNewSecretVersion()
+    {
+        var fake = new FakeAzure();
+        var keys = Keys(fake);
+        var secretName = SecretNames.Generate("claude", "main");
+        var version = fake.SeedSecret(secretName, "old-value", new Dictionary<string, string> { ["name"] = "main", ["provider"] = "claude" });
+        var pinned = new KeyVaultReference(FakeAzure.VaultUri, secretName, version);
+        fake.Seed(KeyName("claude", "main"), pinned.ToJson(), KeyRef);
+
+        await keys.SetValueAsync("claude", "main", "new-value");
+
+        var updated = fake.Settings[KeyName("claude", "main")];
+        var reference = KeyVaultReference.TryParse(global::Azure.Data.AppConfiguration.ConfigurationModelFactory.ConfigurationSetting(
+            updated.Key, updated.Value, null, updated.ContentType, default, null, null));
+        Assert.Multiple(() =>
+        {
+            Assert.That(reference!.Version, Is.Null, "the reference no longer pins the replaced version");
+            Assert.That(reference!.SecretName, Is.EqualTo(secretName));
+            Assert.That(fake.Secrets[secretName].Select(v => v.Value), Is.EqualTo(new[] { "old-value", "new-value" }));
+        });
+        Assert.That((await keys.GetKeysAsync("claude")).Single().Value, Is.EqualTo("new-value"));
+    }
+
+    [Test]
     public async Task SetValue_OnAPlainValue_MovesItBehindAKeyVaultReference()
     {
         var fake = new FakeAzure();

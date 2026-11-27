@@ -140,6 +140,15 @@ public sealed class KeyVaultKeyBackend : IKeyBackend
             var client = ClientFor(reference);
             var secret = Tagged(new KeyVaultSecret(reference.SecretName, value.Trim()), state.Provider, actual);
             await AzureErrors.KeyVaultAsync(vaultName, () => client.SetSecretAsync(secret, cancellationToken)).ConfigureAwait(false);
+
+            if (reference.Version is not null)
+            {
+                // The reference was pinned to the version just replaced; unpin it so reads see the new value.
+                var unpinned = new KeyVaultReference(reference.VaultUri, reference.SecretName);
+                var unpin = AzureErrors.Guarded(setting.Key, unpinned.ToJson(), setting.ETag, KeyVaultReference.ContentType);
+                await AzureErrors.AppConfigurationAsync(storeName, setting.Key, () =>
+                    config.SetConfigurationSettingAsync(unpin, onlyIfUnchanged: true, cancellationToken)).ConfigureAwait(false);
+            }
             return;
         }
 
